@@ -4,7 +4,8 @@ import '../widgets/side_navbar.dart';
 import '../widgets/patient_assignment_tab.dart';
 import '../widgets/users_management_tab.dart';
 import '../widgets/reports_tab.dart';
-import 'setting_screen.dart';
+import '../screens/setting_screen.dart';
+import '../screens/admin_dashboard.dart';
 
 /// Centralised route names used by the sidebar navigation.
 const Map<int, String> _routeMap = {
@@ -16,26 +17,26 @@ const Map<int, String> _routeMap = {
   5: '/settings',
 };
 
-/// A thin wrapper that renders the `SideNavbar` on wide screens (>=1100px)
-/// and the supplied body content. It also handles sidebar navigation via
-/// `Navigator.pushReplacementNamed` so each click truly opens a new page.
-class _SideScreenWrapper extends StatelessWidget {
-  final int selectedIndex;
-  final Widget body;
+/// AdminShell keeps SideNavbar alive and only swaps center content using IndexedStack.
+class AdminShell extends StatefulWidget {
+  const AdminShell({super.key});
 
-  const _SideScreenWrapper({
-    required this.selectedIndex,
-    required this.body,
-  });
+  @override
+  State<AdminShell> createState() => _AdminShellState();
+}
 
-  void _handleNav(BuildContext context, int index) {
-    // No-op if already on the requested page
-    if (index == selectedIndex) return;
-    final String? routeName = _routeMap[index];
-    if (routeName != null) {
-      Navigator.pushReplacementNamed(context, routeName);
-    }
-  }
+class _AdminShellState extends State<AdminShell> {
+  int _selectedIndex = 0;
+
+  // Helper widgets for inner content per tab, not const due to DashboardBody
+  final List<Widget> _pages = [
+    DashboardBody(),
+    const PatientAssignmentTab(),
+    const VisitsScreenBody(),
+    const UsersManagementTab(),
+    const ReportsTab(),
+    const SettingScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -43,94 +44,46 @@ class _SideScreenWrapper extends StatelessWidget {
       backgroundColor: Colors.grey[50],
       body: LayoutBuilder(
         builder: (context, constraints) {
-          // Desktop / wide
+          final stack = IndexedStack(
+            index: _selectedIndex,
+            children: _pages,
+          );
           if (constraints.maxWidth >= 1100) {
             return Row(
               children: [
                 SideNavbar(
-                  selectedIndex: selectedIndex,
-                  onItemSelected: (index) => _handleNav(context, index),
+                  selectedIndex: _selectedIndex,
+                  onItemSelected: (i) => setState(() => _selectedIndex = i),
                 ),
-                Expanded(child: body),
+                Expanded(child: stack),
               ],
             );
           }
-          // Mobile
-          return body;
+          return stack;
         },
       ),
     );
   }
 }
 
-// ---------------------------------------------------------------------------
-//  Individual Pages
-// ---------------------------------------------------------------------------
-
-class PatientsScreen extends StatelessWidget {
-  const PatientsScreen({super.key});
-
+/// DashboardBody uses AdminDashboard's _buildBody logic for reuse in stacked shell.
+class DashboardBody extends StatelessWidget {
+  const DashboardBody({super.key});
   @override
   Widget build(BuildContext context) {
-    return const _SideScreenWrapper(
-      selectedIndex: 1,
-      body: PatientAssignmentTab(),
-    );
+    return AdminDashboard(embedded: true);
   }
 }
 
-class VisitsScreen extends StatelessWidget {
-  const VisitsScreen({super.key});
-
+class VisitsScreenBody extends StatelessWidget {
+  const VisitsScreenBody({super.key});
   @override
-  Widget build(BuildContext context) {
-    return _SideScreenWrapper(
-      selectedIndex: 2,
-      body: Center(
-        child: Text(
-          'Visits screen – not implemented yet',
+  Widget build(BuildContext context) =>
+      Center(
+        child: Text('Visits screen – not implemented yet',
           style: Theme
               .of(context)
               .textTheme
-              .headlineSmall,
-        ),
-      ),
-    );
-  }
-}
-
-class UsersScreen extends StatelessWidget {
-  const UsersScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const _SideScreenWrapper(
-      selectedIndex: 3,
-      body: UsersManagementTab(),
-    );
-  }
-}
-
-class ReportsScreen extends StatelessWidget {
-  const ReportsScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const _SideScreenWrapper(
-      selectedIndex: 4,
-      body: ReportsTab(),
-    );
-  }
-}
-
-class SettingsPageWithSidebar extends StatelessWidget {
-  const SettingsPageWithSidebar({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const _SideScreenWrapper(
-      selectedIndex: 5,
-      body: SettingScreen(),
-    );
-  }
+              .headlineSmall,),
+      );
 }

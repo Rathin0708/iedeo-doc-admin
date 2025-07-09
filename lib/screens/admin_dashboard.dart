@@ -10,7 +10,9 @@ import '../widgets/side_navbar.dart';
 import '../screens/setting_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
-  const AdminDashboard({super.key});
+  final bool embedded;
+
+  const AdminDashboard({super.key, this.embedded = false});
 
   @override
   State<AdminDashboard> createState() => _AdminDashboardState();
@@ -22,7 +24,7 @@ class _AdminDashboardState extends State<AdminDashboard>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
-  int _selectedNavIndex = 0; // Track selected sidebar item
+  final int _selectedNavIndex = 0; // Track selected sidebar item
 
   @override
   void initState() {
@@ -75,7 +77,7 @@ class _AdminDashboardState extends State<AdminDashboard>
       body: LayoutBuilder(
         builder: (context, constraints) {
           // If the screen width is wide (e.g., desktop), show the sidebar
-          if (constraints.maxWidth >= 1100) {
+          if (!widget.embedded && constraints.maxWidth >= 1100) {
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -697,7 +699,8 @@ class _AdminDashboardState extends State<AdminDashboard>
 
   /// Determines which page content to show based on selected sidebar item.
   Widget _pageContent() {
-    // Always show dashboard body in this screen now.
+    // If embedded, ignore sidebar selection state and just show body
+    if (widget.embedded) return _buildBody();
     return _buildBody();
   }
 }

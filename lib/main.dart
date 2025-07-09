@@ -8,7 +8,6 @@ import 'screens/admin_dashboard.dart';
 import 'screens/admin_login.dart';
 import 'services/admin_auth_service.dart';
 import 'services/admin_firebase_service.dart';
-import 'screens/setting_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,12 +64,8 @@ class IdeoAdminApp extends StatelessWidget {
         title: 'Ideo Health Admin Panel',
         debugShowCheckedModeBanner: false,
         routes: {
-          '/dashboard': (_) => const AdminDashboard(),
-          '/patients': (_) => const PatientsScreen(),
-          '/visits': (_) => const VisitsScreen(),
-          '/users': (_) => const UsersScreen(),
-          '/reports': (_) => const ReportsScreen(),
-          '/settings': (_) => const SettingsPageWithSidebar(),
+          '/dashboard': (_) => const AdminShell(),
+          // single shell holds all pages
         },
         theme: ThemeData(
           primarySwatch: Colors.red,
@@ -109,7 +104,7 @@ class AuthWrapper extends StatelessWidget {
     return Consumer<AdminAuthService>(
       builder: (context, authService, child) {
         if (authService.isAuthenticated) {
-          return AdminDashboard();
+          return const AdminShell();
         } else {
           // Always show login screen
           return AdminLogin();
