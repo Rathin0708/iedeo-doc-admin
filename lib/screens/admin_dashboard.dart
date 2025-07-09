@@ -377,6 +377,8 @@ class _AdminDashboardState extends State<AdminDashboard>
                   height: 850, // Fixed height for tab content
                   child: TabBarView(
                     controller: _tabController,
+                    physics: NeverScrollableScrollPhysics(),
+                    // disable swipe navigation
                     children: const [
                       UserApprovalTab(),
                       PatientAssignmentTab(),
