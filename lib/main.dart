@@ -2,11 +2,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:iedeo_doc_admin/screens/side_nav_pages.dart';
 import 'package:provider/provider.dart';
 import 'screens/admin_dashboard.dart';
 import 'screens/admin_login.dart';
 import 'services/admin_auth_service.dart';
 import 'services/admin_firebase_service.dart';
+import 'screens/setting_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -62,6 +64,14 @@ class IdeoAdminApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Ideo Health Admin Panel',
         debugShowCheckedModeBanner: false,
+        routes: {
+          '/dashboard': (_) => const AdminDashboard(),
+          '/patients': (_) => const PatientsScreen(),
+          '/visits': (_) => const VisitsScreen(),
+          '/users': (_) => const UsersScreen(),
+          '/reports': (_) => const ReportsScreen(),
+          '/settings': (_) => const SettingsPageWithSidebar(),
+        },
         theme: ThemeData(
           primarySwatch: Colors.red,
           useMaterial3: true,

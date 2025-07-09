@@ -82,17 +82,19 @@ class _AdminDashboardState extends State<AdminDashboard>
                 SideNavbar(
                   selectedIndex: _selectedNavIndex,
                   onItemSelected: (index) {
-                    setState(() {
-                      _selectedNavIndex = index;
-                      // Optionally, map sidebar selections to tab changes
-                      // Here we map Patients, Users, Reports to their tabs
-                      if (index == 1) _tabController.index = 1; // Patients
-                      if (index == 2) {
-                        // Visits – not implemented yet, keep 0
-                      }
-                      if (index == 3) _tabController.index = 2; // Users
-                      if (index == 4) _tabController.index = 3; // Reports
-                    });
+                    // If the same item is tapped, do nothing
+                    if (index == 0) return;
+                    const routeMap = {
+                      1: '/patients',
+                      2: '/visits',
+                      3: '/users',
+                      4: '/reports',
+                      5: '/settings',
+                    };
+                    final routeName = routeMap[index];
+                    if (routeName != null) {
+                      Navigator.pushReplacementNamed(context, routeName);
+                    }
                   },
                 ),
                 Expanded(child: _pageContent()),
@@ -695,10 +697,7 @@ class _AdminDashboardState extends State<AdminDashboard>
 
   /// Determines which page content to show based on selected sidebar item.
   Widget _pageContent() {
-    if (_selectedNavIndex == 5) {
-      // Settings selected
-      return const SettingScreen();
-    }
+    // Always show dashboard body in this screen now.
     return _buildBody();
   }
 }
