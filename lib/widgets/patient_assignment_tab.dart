@@ -1168,12 +1168,32 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
   Widget _buildPatientCard(BuildContext context, AdminPatient patient,
       AdminFirebaseService firebaseService, bool showAssignButton) {
     // Display both 'Added' and 'Assigned' dates as separate rows
+
     final dateAdded = patient.createdAt;
     final timeAgoAdded = _timeAgo(dateAdded);
     final dateAssigned = patient.assignedAt;
     final timeAgoAssigned = dateAssigned != null
         ? _timeAgo(dateAssigned)
         : null;
+
+    // Calculate time difference in hours for "Added" and "Assigned"
+    final now = DateTime.now();
+    final addedDiffHours = now
+        .difference(dateAdded)
+        .inHours;
+    final assignedDiffHours = dateAssigned != null ? now
+        .difference(dateAssigned)
+        .inHours : 0;
+
+    // Helper: Format as h:mm am/pm
+    String getTimeHHMM(DateTime dt) {
+      int hour = dt.hour;
+      final minute = dt.minute.toString().padLeft(2, '0');
+      final ampm = hour >= 12 ? 'pm' : 'am';
+      hour = hour % 12;
+      if (hour == 0) hour = 12;
+      return '$hour:$minute $ampm';
+    }
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -1204,18 +1224,20 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
             ),
             const SizedBox(height: 16),
 
-            // ------------------ Display Added and Assigned times as two separate rows ------------------
+            // --- Both date and time always, 'ago' only for <=2h ---
             Row(
               children: [
                 Icon(Icons.calendar_today, size: 16, color: Colors.blue),
                 const SizedBox(width: 6),
                 Text('Added: ', style: TextStyle(
                     fontWeight: FontWeight.w600, color: Colors.blue)),
-                Text(_formatDate(dateAdded),
+                Text('${_formatDateDMY(dateAdded)} ${getTimeHHMM(dateAdded)}',
                     style: TextStyle(fontSize: 12, color: Colors.blue[600])),
-                const SizedBox(width: 6),
-                Text('($timeAgoAdded ago)',
-                    style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                if (addedDiffHours < 2) ...[
+                  const SizedBox(width: 6),
+                  Text('(${timeAgoAdded} ago)',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                ],
               ],
             ),
             if (dateAssigned != null) ...[
@@ -1227,11 +1249,14 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
                   const SizedBox(width: 6),
                   Text('Assigned: ', style: TextStyle(
                       fontWeight: FontWeight.w600, color: Colors.green)),
-                  Text(_formatDate(dateAssigned),
+                  Text('${_formatDateDMY(dateAssigned!)} ${getTimeHHMM(
+                      dateAssigned!)}',
                       style: TextStyle(fontSize: 12, color: Colors.green[800])),
-                  const SizedBox(width: 6),
-                  Text('($timeAgoAssigned ago)',
-                      style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                  if (assignedDiffHours < 1) ...[
+                    const SizedBox(width: 6),
+                    Text('($timeAgoAssigned ago)', style: TextStyle(
+                        fontSize: 11, color: Colors.grey[600])),
+                  ],
                 ],
               ),
             ],
@@ -1447,6 +1472,13 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
 
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
+  }
+
+  // Format as DD-MM-YYYY
+  String _formatDateDMY(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}-${date.month
+        .toString()
+        .padLeft(2, '0')}-${date.year}';
   }
 
   void _showAddPatientDialog(BuildContext context) {
