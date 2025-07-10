@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
 import 'package:flutter_image_compress/flutter_image_compress.dart'; // For image compression
 import 'package:flutter/foundation.dart';
+import 'package:syncfusion_flutter_datepicker/datepicker.dart';
 import '../services/admin_firebase_service.dart';
 import '../models/admin_patient.dart';
 import '../models/admin_user.dart';
@@ -802,6 +803,45 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
     });
   }
 
+  void _showMiniDateRangePicker(BuildContext context,
+      StateSetter setDialogState) {
+    showDialog(
+      context: context,
+      builder: (ct) =>
+          AlertDialog(
+            title: const Text('Select Date Range'),
+            content: SizedBox(
+              width: 340,
+              height: 360,
+              child: SfDateRangePicker(
+                selectionMode: DateRangePickerSelectionMode.range,
+                initialSelectedRange: _dateRange == null
+                    ? null
+                    : PickerDateRange(_dateRange!.start, _dateRange!.end),
+                onSelectionChanged: (DateRangePickerSelectionChangedArgs args) {
+                  if (args.value is PickerDateRange) {
+                    setDialogState(() {
+                      _dateRange = DateTimeRange(
+                        start: args.value.startDate,
+                        end: args.value.endDate ?? args.value.startDate,
+                      );
+                    });
+                    Navigator.of(ct).pop();
+                  }
+                },
+                showActionButtons: false,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ct).pop(),
+                child: const Text('Close'),
+              )
+            ],
+          ),
+    );
+  }
+
   void _showAdvancedFiltersDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -834,21 +874,9 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
                               style: TextStyle(fontWeight: FontWeight.bold)),
                           const SizedBox(height: 8),
                           InkWell(
-                            onTap: () async {
-                              final DateTimeRange? picked = await showDateRangePicker(
-                                context: context,
-                                firstDate: DateTime.now().subtract(
-                                    const Duration(days: 365)),
-                                lastDate: DateTime.now().add(
-                                    const Duration(days: 365)),
-                                initialDateRange: _dateRange,
-                              );
-                              if (picked != null) {
-                                setDialogState(() {
-                                  _dateRange = picked;
-                                });
-                              }
-                            },
+                            onTap: () =>
+                                _showMiniDateRangePicker(
+                                    context, setDialogState),
                             child: Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
@@ -861,7 +889,9 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
                                   const SizedBox(width: 8),
                                   Text(
                                     _dateRange != null
-                                        ? '\${_formatDate(_dateRange!.start)} - \${_formatDate(_dateRange!.end)}'
+                                        ? '${_formatDate(
+                                        _dateRange!.start)} - ${_formatDate(
+                                        _dateRange!.end)}'
                                         : 'Select date range',
                                   ),
                                   const Spacer(),
