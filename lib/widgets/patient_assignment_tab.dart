@@ -140,6 +140,19 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
     with TickerProviderStateMixin {
   late TabController _tabController;
 
+  // Helper to show 'x time ago' label
+  String _timeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final diff = now.difference(dateTime);
+    if (diff.inSeconds < 60) return '${diff.inSeconds}s';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    if (diff.inDays < 7) return '${diff.inDays}d';
+    if (diff.inDays < 30) return '${(diff.inDays / 7).floor()}w';
+    if (diff.inDays < 365) return '${(diff.inDays / 30).floor()}mo';
+    return '${(diff.inDays / 365).floor()}y';
+  }
+
   /// Displays a section with thumbnails for prescription images (or a "No images" message if none)
   Widget _buildPrescriptionImagesSection(BuildContext context,
       AdminPatient patient) {
@@ -991,6 +1004,15 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
     // Apply filters
     List<AdminPatient> filteredPatients = _applyFilters(patients);
 
+    // Sort: For "All" patients tab (i.e., showAssignButton == false), sort patients by assignedAt (if available), else createdAt, descending (most recent first)
+    if (!showAssignButton) {
+      filteredPatients.sort((a, b) {
+        final aTime = a.assignedAt ?? a.createdAt;
+        final bTime = b.assignedAt ?? b.createdAt;
+        return bTime.compareTo(aTime);
+      });
+    }
+
     if (filteredPatients.isEmpty) {
       return Center(
         child: Column(
@@ -1145,6 +1167,14 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
 
   Widget _buildPatientCard(BuildContext context, AdminPatient patient,
       AdminFirebaseService firebaseService, bool showAssignButton) {
+    // Display both 'Added' and 'Assigned' dates as separate rows
+    final dateAdded = patient.createdAt;
+    final timeAgoAdded = _timeAgo(dateAdded);
+    final dateAssigned = patient.assignedAt;
+    final timeAgoAssigned = dateAssigned != null
+        ? _timeAgo(dateAssigned)
+        : null;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       elevation: 4,
@@ -1173,6 +1203,41 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
               ],
             ),
             const SizedBox(height: 16),
+
+            // ------------------ Display Added and Assigned times as two separate rows ------------------
+            Row(
+              children: [
+                Icon(Icons.calendar_today, size: 16, color: Colors.blue),
+                const SizedBox(width: 6),
+                Text('Added: ', style: TextStyle(
+                    fontWeight: FontWeight.w600, color: Colors.blue)),
+                Text(_formatDate(dateAdded),
+                    style: TextStyle(fontSize: 12, color: Colors.blue[600])),
+                const SizedBox(width: 6),
+                Text('($timeAgoAdded ago)',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+              ],
+            ),
+            if (dateAssigned != null) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(Icons.assignment_turned_in, size: 16,
+                      color: Colors.green),
+                  const SizedBox(width: 6),
+                  Text('Assigned: ', style: TextStyle(
+                      fontWeight: FontWeight.w600, color: Colors.green)),
+                  Text(_formatDate(dateAssigned),
+                      style: TextStyle(fontSize: 12, color: Colors.green[800])),
+                  const SizedBox(width: 6),
+                  Text('($timeAgoAssigned ago)',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                ],
+              ),
+            ],
+            // -------------------------------------------------------------------
+
+            const SizedBox(height: 12),
 
             // Patient details
             Container(
@@ -1221,9 +1286,6 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
                       fontWeight: FontWeight.w600, color: Colors.blue[800])),
                   Text(patient.doctorName, style: TextStyle(
                       color: Colors.blue[700], fontWeight: FontWeight.w500)),
-                  const Spacer(),
-                  Text(_formatDate(patient.createdAt),
-                      style: TextStyle(fontSize: 12, color: Colors.blue[600])),
                 ],
               ),
             ),
