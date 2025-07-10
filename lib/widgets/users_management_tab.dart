@@ -14,6 +14,7 @@ class _UsersManagementTabState extends State<UsersManagementTab> {
   String _searchQuery = '';
   String _selectedRole = 'All';
   String _selectedStatus = 'All';
+  bool _isAscending = true;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +25,13 @@ class _UsersManagementTabState extends State<UsersManagementTab> {
         }
 
         final allUsers = firebaseService.allUsers;
-        final filteredUsers = _filterUsers(allUsers);
+        var filteredUsers = _filterUsers(allUsers);
+
+        filteredUsers.sort((a, b) {
+          return _isAscending
+              ? a.name.toLowerCase().compareTo(b.name.toLowerCase())
+              : b.name.toLowerCase().compareTo(a.name.toLowerCase());
+        });
 
         return Column(
           children: [
@@ -116,6 +123,23 @@ class _UsersManagementTabState extends State<UsersManagementTab> {
                                 onChanged: (value) {
                                   setState(() {
                                     _selectedStatus = value!;
+                                  });
+                                },
+                              ),
+                            ),
+                            // Sort Order Button
+                            const SizedBox(width: 12),
+                            Tooltip(
+                              message: _isAscending
+                                  ? 'Ascending Order'
+                                  : 'Descending Order',
+                              child: IconButton(
+                                icon: Icon(_isAscending
+                                    ? Icons.arrow_downward
+                                    : Icons.arrow_upward),
+                                onPressed: () {
+                                  setState(() {
+                                    _isAscending = !_isAscending;
                                   });
                                 },
                               ),
