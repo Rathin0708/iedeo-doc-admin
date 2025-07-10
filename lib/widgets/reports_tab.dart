@@ -3,17 +3,9 @@ import 'package:provider/provider.dart';
 import '../services/admin_firebase_service.dart';
 import 'package:printing/printing.dart';
 
-// Excel export dependencies
-import 'dart:io';
-import 'package:excel/excel.dart' as xls;
-import 'package:path_provider/path_provider.dart';
-import 'package:open_file/open_file.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:html' as html;
-import 'package:permission_handler/permission_handler.dart';
+// PDF export dependencies
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart'; // For PdfColor, PdfPageFormat
-import 'package:printing/printing.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
 class ReportsTab extends StatefulWidget {
@@ -150,20 +142,6 @@ class _ReportsTabState extends State<ReportsTab> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      ElevatedButton.icon(
-                        onPressed: () =>
-                            _exportToExcel(context, firebaseService),
-                        icon: const Icon(Icons.download, size: 18),
-                        label: const Text('Export Excel'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green[600],
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
                       ElevatedButton.icon(
                         onPressed: () =>
                             _exportToPDF(context, firebaseService),
@@ -739,108 +717,6 @@ class _ReportsTabState extends State<ReportsTab> {
       }
     }
     return rows;
-  }
-
-  void _exportToExcel(BuildContext context,
-      AdminFirebaseService firebaseService) async {
-    final bool confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) =>
-          AlertDialog(
-            title: const Text('Export to Excel'),
-            content: Text('Export $_selectedReportType for $_selectedPeriod?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton.icon(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                icon: const Icon(Icons.download),
-                label: const Text('Export'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green[600],
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ],
-          ),
-    ) ?? false;
-    if (!confirm) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => const Center(child: CircularProgressIndicator()),
-    );
-    try {
-      final rows = buildExportRows(firebaseService, _selectedReportType);
-      final excel = xls.Excel.createExcel();
-      final String sheetName = _selectedReportType.replaceAll(' ', '_');
-      excel.rename('Sheet1', sheetName);
-      final xls.Sheet sheet = excel[sheetName];
-      for (final row in rows) {
-        sheet.appendRow(List<String>.from(row));
-      }
-      final fileName = '${sheetName}_${DateTime
-          .now()
-          .millisecondsSinceEpoch}.xlsx';
-      if (kIsWeb) {
-        final excelBytes = excel.encode()!;
-        final blob = html.Blob([excelBytes],
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        final url = html.Url.createObjectUrlFromBlob(blob);
-        final anchor = html.AnchorElement(href: url)
-          ..setAttribute('download', fileName)
-          ..click();
-        if (Navigator.of(context).canPop()) Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Excel file downloaded.'),
-          backgroundColor: Colors.green,
-        ));
-        return;
-      }
-      Directory? directory;
-      String? realPath;
-      bool hasPermission = true;
-      if (Platform.isAndroid) {
-        final status = await Permission.manageExternalStorage.request();
-        if (!status.isGranted) hasPermission = false;
-      }
-      if (hasPermission) {
-        if (Platform.isAndroid) {
-          directory = Directory('/storage/emulated/0/Download');
-          if (!directory.existsSync())
-            directory = await getExternalStorageDirectory();
-        } else if (Platform.isIOS) {
-          directory = await getApplicationDocumentsDirectory();
-        } else {
-          directory = await getDownloadsDirectory() ??
-              await getApplicationDocumentsDirectory();
-        }
-        final file = File('${directory!.path}/$fileName');
-        await file.writeAsBytes(excel.encode() as List<int>);
-        realPath = file.path;
-      }
-      if (Navigator.of(context).canPop()) Navigator.of(context).pop();
-      if (hasPermission) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Exported: $fileName\nPath: $realPath'),
-          backgroundColor: Colors.green,
-        ));
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Storage permission denied. Cannot save file.'),
-          backgroundColor: Colors.red,
-        ));
-      }
-    } catch (e) {
-      if (Navigator.of(context).canPop()) Navigator.of(context).pop();
-      print('EXPORT ERROR: $e');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Export failed: $e'),
-        backgroundColor: Colors.red,
-      ));
-    }
   }
 
   Future<void> _exportToPDF(BuildContext context,
