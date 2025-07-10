@@ -210,21 +210,39 @@ class _ReportsTabState extends State<ReportsTab> {
                     const SizedBox(height: 20),
 
                     // Reports Based on Selection
-                    if (_selectedReportType == 'All Reports' ||
-                        _selectedReportType == 'Referrals by Doctor')
-                      _buildReferralsByDoctorReport(firebaseService),
-                    if (_selectedReportType == 'All Reports' ||
-                        _selectedReportType == 'Visits by Therapist')
-                      _buildVisitsByTherapistReport(firebaseService),
-                    if (_selectedReportType == 'All Reports' ||
-                        _selectedReportType == 'Pending Follow-ups')
-                      _buildPendingFollowupsReport(firebaseService),
-                    if (_selectedReportType == 'All Reports' ||
-                        _selectedReportType == 'Revenue Report')
-                      _buildRevenueReport(firebaseService),
-                    if (_selectedReportType == 'All Reports' ||
-                        _selectedReportType == 'Patient Report')
-                      _buildPatientReport(firebaseService),
+                    Builder(
+                      builder: (_) {
+                        // Only show the selected report section/page at a time.
+                        if (_selectedReportType == 'All Reports') {
+                          // Show all topics; each in its own card and heading.
+                          return Column(
+                            children: [
+                              _buildReferralsByDoctorReport(firebaseService),
+                              _buildVisitsByTherapistReport(firebaseService),
+                              _buildPendingFollowupsReport(firebaseService),
+                              _buildRevenueReport(firebaseService),
+                              _buildPatientReport(firebaseService),
+                            ],
+                          );
+                        } else
+                        if (_selectedReportType == 'Referrals by Doctor') {
+                          return _buildReferralsByDoctorReport(firebaseService);
+                        } else
+                        if (_selectedReportType == 'Visits by Therapist') {
+                          return _buildVisitsByTherapistReport(firebaseService);
+                        } else
+                        if (_selectedReportType == 'Pending Follow-ups') {
+                          return _buildPendingFollowupsReport(firebaseService);
+                        } else if (_selectedReportType == 'Revenue Report') {
+                          return _buildRevenueReport(firebaseService);
+                        } else if (_selectedReportType == 'Patient Report') {
+                          return _buildPatientReport(firebaseService);
+                        } else {
+                          // Fallback empty space for future types
+                          return const SizedBox.shrink();
+                        }
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -792,7 +810,7 @@ class _ReportsTabState extends State<ReportsTab> {
       // Use patientReportOverride if provided, else fallback to firebaseService
       final data = patientReportOverride ??
           firebaseService.reportData['patientReport'] as List<
-          Map<String, dynamic>>? ?? [];
+              Map<String, dynamic>>? ?? [];
       rows.add(['Patient Name', 'Therapist', 'Doctor', 'Last Visit']);
       for (final row in data) {
         rows.add([
@@ -891,35 +909,145 @@ class _ReportsTabState extends State<ReportsTab> {
       builder: (ctx) => const Center(child: CircularProgressIndicator()),
     );
     try {
-      // Always use UI-coherent patient data for export
-      final rows = buildExportRows(firebaseService, _selectedReportType,
-          patientReportOverride: _localPatientReport);
       final fontData = await rootBundle.load(
           'assets/fonts/NotoSans-Regular.ttf');
       final ttf = pw.Font.ttf(fontData.buffer.asByteData());
       final pdf = pw.Document();
-      pdf.addPage(
-        pw.MultiPage(
-          build: (context) =>
-          [
-            pw.Text('$_selectedReportType ($_selectedPeriod)',
+      pw.Widget buildSection({required String heading, required List<
+          String> headers, required List<
+          List<String>> dataRows, PdfColor? headerColor}) {
+        return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(heading,
                 style: pw.TextStyle(
-                    font: ttf, fontSize: 18, fontWeight: pw.FontWeight.bold)),
-            pw.SizedBox(height: 10),
+                  font: ttf,
+                  fontSize: 16,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColor.fromHex('#3954A4'),
+                )),
+            pw.SizedBox(height: 6),
             pw.Table.fromTextArray(
-              headers: rows.isNotEmpty ? rows[0] : [],
-              data: rows.length > 1 ? rows.sublist(1).where((row) =>
-              row.isNotEmpty).toList() : [],
+              headers: headers,
+              data: dataRows,
               headerStyle: pw.TextStyle(
                   font: ttf, fontWeight: pw.FontWeight.bold),
               cellStyle: pw.TextStyle(font: ttf, fontSize: 11),
               headerDecoration: pw.BoxDecoration(
-                  color: PdfColor.fromHex('#E3F2FD')),
+                color: headerColor ?? PdfColor.fromHex('#E3F2FD'),
+              ),
               cellAlignment: pw.Alignment.centerLeft,
             ),
+            pw.SizedBox(height: 24),
           ],
-        ),
-      );
+        );
+      }
+      final pageWidgets = <pw.Widget>[];
+      if (_selectedReportType == 'All Reports') {
+        final rRows = buildExportRows(firebaseService, 'Referrals by Doctor');
+        if (rRows.length > 1) {
+          pageWidgets.add(buildSection(
+            heading: 'Referrals by Doctor',
+            headers: rRows[0],
+            dataRows: rRows.sublist(1).where((row) => row.isNotEmpty).toList(),
+            headerColor: PdfColor.fromHex('#E3F2FD'),
+          ));
+        }
+        final vRows = buildExportRows(firebaseService, 'Visits by Therapist');
+        if (vRows.length > 1) {
+          pageWidgets.add(buildSection(
+            heading: 'Visits by Therapist',
+            headers: vRows[0],
+            dataRows: vRows.sublist(1).where((row) => row.isNotEmpty).toList(),
+            headerColor: PdfColor.fromHex('#E8F5E9'),
+          ));
+        }
+        final fRows = buildExportRows(firebaseService, 'Pending Follow-ups');
+        if (fRows.length > 1) {
+          pageWidgets.add(buildSection(
+            heading: 'Pending Follow-ups',
+            headers: fRows[0],
+            dataRows: fRows.sublist(1).where((row) => row.isNotEmpty).toList(),
+            headerColor: PdfColor.fromHex('#FFF3E0'),
+          ));
+        }
+        final revRows = buildExportRows(firebaseService, 'Revenue Report');
+        if (revRows.length > 1) {
+          pageWidgets.add(buildSection(
+            heading: 'Revenue Report',
+            headers: revRows[0],
+            dataRows: revRows
+                .sublist(1)
+                .where((row) => row.isNotEmpty)
+                .toList(),
+            headerColor: PdfColor.fromHex('#EDE7F6'),
+          ));
+        }
+        final patRows = buildExportRows(firebaseService, 'Patient Report',
+            patientReportOverride: _localPatientReport);
+        if (patRows.length > 1) {
+          pageWidgets.add(buildSection(
+            heading: 'Patient Report',
+            headers: patRows[0],
+            dataRows: patRows
+                .sublist(1)
+                .where((row) => row.isNotEmpty)
+                .toList(),
+            headerColor: PdfColor.fromHex('#E0F2F1'),
+          ));
+        }
+        pdf.addPage(
+          pw.MultiPage(
+            build: (context) =>
+            [
+              pw.Text('All Reports ($_selectedPeriod)', style: pw.TextStyle(
+                  font: ttf, fontSize: 18, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 12),
+              ...pageWidgets,
+            ],
+          ),
+        );
+      } else {
+        final rows = buildExportRows(firebaseService, _selectedReportType,
+            patientReportOverride: _localPatientReport);
+        if (rows.length > 1) {
+          pdf.addPage(
+            pw.MultiPage(
+              build: (context) =>
+              [
+                pw.Text('$_selectedReportType ($_selectedPeriod)',
+                    style: pw.TextStyle(font: ttf,
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold)),
+                pw.SizedBox(height: 12),
+                buildSection(
+                  heading: _selectedReportType,
+                  headers: rows[0],
+                  dataRows: rows
+                      .sublist(1)
+                      .where((row) => row.isNotEmpty)
+                      .toList(),
+                ),
+              ],
+            ),
+          );
+        } else {
+          pdf.addPage(
+            pw.MultiPage(
+              build: (context) =>
+              [
+                pw.Text('$_selectedReportType ($_selectedPeriod)',
+                    style: pw.TextStyle(font: ttf,
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold)),
+                pw.SizedBox(height: 12),
+                pw.Text('No data to export.',
+                    style: pw.TextStyle(font: ttf, fontSize: 14)),
+              ],
+            ),
+          );
+        }
+      }
       if (Navigator.of(context).canPop()) Navigator.of(context).pop();
       await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => pdf.save(),
