@@ -1224,19 +1224,24 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
             ),
             const SizedBox(height: 16),
 
-            // --- Both date and time always, 'ago' only for <=2h ---
+            // --- Show date + ago OR date + time, never both time and ago ---
             Row(
               children: [
                 Icon(Icons.calendar_today, size: 16, color: Colors.blue),
                 const SizedBox(width: 6),
                 Text('Added: ', style: TextStyle(
                     fontWeight: FontWeight.w600, color: Colors.blue)),
-                Text('${_formatDateDMY(dateAdded)} ${getTimeHHMM(dateAdded)}',
-                    style: TextStyle(fontSize: 12, color: Colors.blue[600])),
                 if (addedDiffHours < 2) ...[
+                  Text(_formatDateDMY(dateAdded),
+                      style: TextStyle(fontSize: 12, color: Colors.blue[600])),
                   const SizedBox(width: 6),
-                  Text('(${timeAgoAdded} ago)',
+                  Text('($timeAgoAdded ago)',
                       style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                ] else
+                  ...[
+                    Text('${_formatDateDMY(dateAdded)} ${getTimeHHMM(
+                        dateAdded)}', style: TextStyle(
+                        fontSize: 12, color: Colors.blue[600])),
                 ],
               ],
             ),
@@ -1249,13 +1254,17 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
                   const SizedBox(width: 6),
                   Text('Assigned: ', style: TextStyle(
                       fontWeight: FontWeight.w600, color: Colors.green)),
-                  Text('${_formatDateDMY(dateAssigned!)} ${getTimeHHMM(
-                      dateAssigned!)}',
-                      style: TextStyle(fontSize: 12, color: Colors.green[800])),
-                  if (assignedDiffHours < 1) ...[
+                  if (assignedDiffHours < 2) ...[
+                    Text(_formatDateDMY(dateAssigned!), style: TextStyle(
+                        fontSize: 12, color: Colors.green[800])),
                     const SizedBox(width: 6),
-                    Text('($timeAgoAssigned ago)', style: TextStyle(
+                    Text('(${timeAgoAssigned} ago)', style: TextStyle(
                         fontSize: 11, color: Colors.grey[600])),
+                  ] else
+                    ...[
+                      Text('${_formatDateDMY(dateAssigned!)} ${getTimeHHMM(
+                          dateAssigned!)}', style: TextStyle(
+                          fontSize: 12, color: Colors.green[800])),
                   ],
                 ],
               ),
