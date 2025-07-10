@@ -916,4 +916,31 @@ class AdminFirebaseService extends ChangeNotifier {
     _isLoading = loading;
     notifyListeners();
   }
+
+  /// Fetches all patient report data for the ReportsTab and stores it in _reportData['patientReport'].
+  Future<void> fetchPatientReport() async {
+    _setLoading(true);
+    try {
+      QuerySnapshot snapshot = await _firestore.collection('referrals').get();
+      _reportData['patientReport'] = snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return {
+          'name': data['patientName'] ?? '',
+          'therapist': data['therapistName'] ?? '',
+          'doctor': data['doctorName'] ?? '',
+          'lastVisit': data['lastVisitDate'] != null
+              ? (data['lastVisitDate'] is Timestamp
+              ? (data['lastVisitDate'] as Timestamp).toDate().toString().split(
+              ' ')[0]
+              : data['lastVisitDate'].toString().split(' ')[0])
+              : '',
+        };
+      }).toList();
+    } catch (e) {
+      _reportData['patientReport'] = [];
+    } finally {
+      _setLoading(false);
+      notifyListeners();
+    }
+  }
 }

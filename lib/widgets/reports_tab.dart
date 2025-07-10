@@ -19,6 +19,43 @@ class _ReportsTabState extends State<ReportsTab> {
   String _selectedPeriod = 'This Week';
   String _selectedReportType = 'All Reports';
 
+  // Hold patient report data locally to avoid flicker or clearing on rebuild
+  List<Map<String, dynamic>> _localPatientReport = [];
+  bool _patientReportLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Fetch real patient report data only once when widget is initialized
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final service = Provider.of<AdminFirebaseService>(context, listen: false);
+      await service.fetchPatientReport();
+      // Save data locally if not already done (prevents re-clearing)
+      if (mounted) {
+        setState(() {
+          _localPatientReport = List<Map<String, dynamic>>.from(
+              service.reportData['patientReport'] ?? []);
+          _patientReportLoaded = true;
+        });
+      }
+    });
+  }
+
+  // Call this to manually refresh data on request
+  Future<void> _refreshPatientReport(AdminFirebaseService service) async {
+    setState(() {
+      _patientReportLoaded = false;
+    });
+    await service.fetchPatientReport();
+    if (mounted) {
+      setState(() {
+        _localPatientReport = List<Map<String, dynamic>>.from(
+            service.reportData['patientReport'] ?? []);
+        _patientReportLoaded = true;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<AdminFirebaseService>(
@@ -127,7 +164,8 @@ class _ReportsTabState extends State<ReportsTab> {
                             'Referrals by Doctor',
                             'Visits by Therapist',
                             'Pending Follow-ups',
-                            'Revenue Report'
+                            'Revenue Report',
+                            'Patient Report', // <-- Added
                           ].map((type) =>
                               DropdownMenuItem(
                                 value: type,
@@ -184,6 +222,9 @@ class _ReportsTabState extends State<ReportsTab> {
                     if (_selectedReportType == 'All Reports' ||
                         _selectedReportType == 'Revenue Report')
                       _buildRevenueReport(firebaseService),
+                    if (_selectedReportType == 'All Reports' ||
+                        _selectedReportType == 'Patient Report')
+                      _buildPatientReport(firebaseService),
                   ],
                 ),
               ),
@@ -599,8 +640,101 @@ class _ReportsTabState extends State<ReportsTab> {
     );
   }
 
+  Widget _buildPatientReport(AdminFirebaseService firebaseService) {
+    // Use local patient report data which persists through rebuilds
+    final patients = _localPatientReport;
+
+    // Debug Section: Visual confirmation and debugging
+    bool debugMode = true; // Set to true for extra debugging UI
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 20),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.person, color: Colors.teal[700]),
+                const SizedBox(width: 8),
+                Text(
+                  'Patient Report',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                // Manual refresh button if needed
+                const Spacer(),
+                IconButton(
+                  icon: Icon(Icons.refresh, color: Colors.teal[700], size: 20),
+                  tooltip: 'Refresh Patient Report',
+                  onPressed: () => _refreshPatientReport(firebaseService),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (!_patientReportLoaded) ...[
+              // Show progress while loading/refetching patient data only
+              const Center(child: CircularProgressIndicator()),
+              const SizedBox(height: 10),
+            ],
+            if (debugMode) ...[
+              // Shows patient report list length for quick checking
+              Text('Patient report data count: ${patients.length}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              // List out the first patient data map for visual debugging
+              if (patients.isNotEmpty)
+                Text('First patient data: ${patients.first.toString()}',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]))
+              else
+                Text('No patient data received from service',
+                    style: TextStyle(fontSize: 11, color: Colors.red)),
+              const Divider(),
+            ],
+            if (_patientReportLoaded && patients.isEmpty)
+            // Graceful message for empty state
+              Container(
+                padding: const EdgeInsets.all(20),
+                child: Center(
+                  child: Text(
+                    'No patient data available',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ),
+              )
+            else
+              if (_patientReportLoaded)
+              Container(
+                width: double.infinity,
+                // DataTable renders the patient details
+                child: DataTable(
+                  columns: const [
+                    DataColumn(label: Text('Patient Name')),
+                    DataColumn(label: Text('Therapist')),
+                    DataColumn(label: Text('Doctor')),
+                    DataColumn(label: Text('Last Visit')),
+                  ],
+                  rows: patients.map((patient) {
+                    return DataRow(cells: [
+                      DataCell(Text(patient['name'] ?? 'Unknown')),
+                      DataCell(Text(patient['therapist'] ?? 'Unknown')),
+                      DataCell(Text(patient['doctor'] ?? 'Unknown')),
+                      DataCell(Text(patient['lastVisit'] ?? '-')),
+                    ]);
+                  }).toList(),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   List<List<String>> buildExportRows(AdminFirebaseService firebaseService,
-      String reportType) {
+      String reportType, {List<Map<String, dynamic>>? patientReportOverride}) {
     final List<List<String>> rows = [];
     if (reportType == 'Referrals by Doctor') {
       rows.add(['Doctor Name', 'Total Referrals', 'Completed', 'Pending']);
@@ -654,6 +788,20 @@ class _ReportsTabState extends State<ReportsTab> {
         '${revenue['thisWeekVisits'] ?? 0}',
         '${revenue['thisMonthVisits'] ?? 0}'
       ]);
+    } else if (reportType == 'Patient Report') {
+      // Use patientReportOverride if provided, else fallback to firebaseService
+      final data = patientReportOverride ??
+          firebaseService.reportData['patientReport'] as List<
+          Map<String, dynamic>>? ?? [];
+      rows.add(['Patient Name', 'Therapist', 'Doctor', 'Last Visit']);
+      for (final row in data) {
+        rows.add([
+          row['name'] ?? '',
+          row['therapist'] ?? '',
+          row['doctor'] ?? '',
+          row['lastVisit'] ?? '',
+        ]);
+      }
     } else { // All Reports: concatenate all
       final dataR = firebaseService.reportData['referralsByDoctor'] as List<
           Map<String, dynamic>>? ?? [];
@@ -715,6 +863,22 @@ class _ReportsTabState extends State<ReportsTab> {
         ]);
         rows.add(List<String>.filled(3, ''));
       }
+      // For All Reports export, also use the local version for patient report if available
+      final patientExport = patientReportOverride ??
+          firebaseService.reportData['patientReport'] as List<
+              Map<String, dynamic>>? ?? [];
+      if (patientExport.isNotEmpty) {
+        rows.add(['Patient Name', 'Therapist', 'Doctor', 'Last Visit']);
+        for (final row in patientExport) {
+          rows.add([
+            row['name'] ?? '',
+            row['therapist'] ?? '',
+            row['doctor'] ?? '',
+            row['lastVisit'] ?? '',
+          ]);
+        }
+        rows.add(List<String>.filled(4, ''));
+      }
     }
     return rows;
   }
@@ -727,7 +891,9 @@ class _ReportsTabState extends State<ReportsTab> {
       builder: (ctx) => const Center(child: CircularProgressIndicator()),
     );
     try {
-      final rows = buildExportRows(firebaseService, _selectedReportType);
+      // Always use UI-coherent patient data for export
+      final rows = buildExportRows(firebaseService, _selectedReportType,
+          patientReportOverride: _localPatientReport);
       final fontData = await rootBundle.load(
           'assets/fonts/NotoSans-Regular.ttf');
       final ttf = pw.Font.ttf(fontData.buffer.asByteData());
