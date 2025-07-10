@@ -126,9 +126,9 @@ class _AdminDashboardState extends State<AdminDashboard>
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        Colors.red[700]!,
-                        Colors.red[500]!,
-                        Colors.pink[400]!,
+                        Colors.lightGreen[600]!,
+                        Colors.green[500]!,
+                        Colors.grey[400]!,
                       ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -309,7 +309,8 @@ class _AdminDashboardState extends State<AdminDashboard>
                           unselectedLabelColor: Colors.grey[600],
                           indicator: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: [Colors.red[500]!, Colors.red[700]!],
+                              colors: [ Colors.lightGreen[600]!,
+                                Colors.green[500]!],
                             ),
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -404,9 +405,9 @@ class _AdminDashboardState extends State<AdminDashboard>
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                Colors.red[600]!,
-                Colors.pink[500]!,
-                Colors.purple[400]!,
+                Colors.lightGreen[600]!,
+                Colors.green[500]!,
+                Colors.grey[400]!,
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,

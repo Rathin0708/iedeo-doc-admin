@@ -484,6 +484,7 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
+                  physics: NeverScrollableScrollPhysics(), // prevent swipe
                   children: [
                     _buildPatientsList(
                         context, firebaseService, unassignedPatients, true),
