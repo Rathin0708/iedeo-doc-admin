@@ -14,6 +14,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart'; // For PdfColor, PdfPageFormat
 import 'package:printing/printing.dart';
+import 'package:flutter/services.dart' show rootBundle;
 
 class ReportsTab extends StatefulWidget {
   const ReportsTab({super.key});
@@ -620,20 +621,14 @@ class _ReportsTabState extends State<ReportsTab> {
     );
   }
 
-  void exportToExcelForWeb(Map<String, dynamic> exportData, String reportType) {
-    final excel = xls.Excel.createExcel();
-    final String sheetName = reportType.replaceAll(' ', '_');
-    excel.rename('Sheet1', sheetName);
-    final xls.Sheet sheet = excel[sheetName];
-
-    List<List<String>> rows = [];
-
-    if (reportType == 'Referrals by Doctor' ||
-        exportData.containsKey('referrals')) {
+  List<List<String>> buildExportRows(AdminFirebaseService firebaseService,
+      String reportType) {
+    final List<List<String>> rows = [];
+    if (reportType == 'Referrals by Doctor') {
       rows.add(['Doctor Name', 'Total Referrals', 'Completed', 'Pending']);
-      final referrals = List<Map<String, dynamic>>.from(
-          exportData['referrals'] ?? []);
-      for (var row in referrals) {
+      final data = firebaseService.reportData['referralsByDoctor'] as List<
+          Map<String, dynamic>>? ?? [];
+      for (final row in data) {
         rows.add([
           row['doctorName'] ?? '',
           '${row['totalReferrals'] ?? 0}',
@@ -641,16 +636,12 @@ class _ReportsTabState extends State<ReportsTab> {
           '${row['pending'] ?? 0}',
         ]);
       }
-      rows.add(List<String>.filled(4, ''));
-    }
-
-    if (reportType == 'Visits by Therapist' ||
-        exportData.containsKey('visits')) {
+    } else if (reportType == 'Visits by Therapist') {
       rows.add(
           ['Therapist Name', 'Total Visits', 'This Week', 'Completion Rate']);
-      final visits = List<Map<String, dynamic>>.from(
-          exportData['visits'] ?? []);
-      for (var row in visits) {
+      final data = firebaseService.reportData['visitsByTherapist'] as List<
+          Map<String, dynamic>>? ?? [];
+      for (final row in data) {
         rows.add([
           row['therapistName'] ?? '',
           '${row['totalVisits'] ?? 0}',
@@ -658,15 +649,11 @@ class _ReportsTabState extends State<ReportsTab> {
           '${row['completionRate'] ?? 0}%',
         ]);
       }
-      rows.add(List<String>.filled(4, ''));
-    }
-
-    if (reportType == 'Pending Follow-ups' ||
-        exportData.containsKey('followups')) {
+    } else if (reportType == 'Pending Follow-ups') {
       rows.add(['Patient Name', 'Therapist', 'Last Visit', 'Due Date']);
-      final followups = List<Map<String, dynamic>>.from(
-          exportData['followups'] ?? []);
-      for (var row in followups) {
+      final data = firebaseService.reportData['pendingFollowups'] as List<
+          Map<String, dynamic>>? ?? [];
+      for (final row in data) {
         rows.add([
           row['patientName'] ?? '',
           row['therapistName'] ?? '',
@@ -674,43 +661,86 @@ class _ReportsTabState extends State<ReportsTab> {
           row['dueDate'] ?? '',
         ]);
       }
-      rows.add(List<String>.filled(4, ''));
-    }
-
-    if (reportType == 'Revenue Report' || exportData.containsKey('revenue')) {
+    } else if (reportType == 'Revenue Report') {
       rows.add(['Metric', 'This Week', 'This Month']);
-      final revenue = Map<String, dynamic>.from(exportData['revenue'] ?? {});
+      final revenue = firebaseService.reportData['revenueData'] as Map<
+          String,
+          dynamic>? ?? {};
       rows.add([
         'Revenue',
         '₹${revenue['thisWeek'] ?? 0}',
-        '₹${revenue['thisMonth'] ?? 0}',
+        '₹${revenue['thisMonth'] ?? 0}'
       ]);
       rows.add([
         'Visits',
         '${revenue['thisWeekVisits'] ?? 0}',
-        '${revenue['thisMonthVisits'] ?? 0}',
+        '${revenue['thisMonthVisits'] ?? 0}'
       ]);
-      rows.add(List<String>.filled(4, ''));
+    } else { // All Reports: concatenate all
+      final dataR = firebaseService.reportData['referralsByDoctor'] as List<
+          Map<String, dynamic>>? ?? [];
+      final dataV = firebaseService.reportData['visitsByTherapist'] as List<
+          Map<String, dynamic>>? ?? [];
+      final dataF = firebaseService.reportData['pendingFollowups'] as List<
+          Map<String, dynamic>>? ?? [];
+      final revenue = firebaseService.reportData['revenueData'] as Map<
+          String,
+          dynamic>? ?? {};
+      if (dataR.isNotEmpty) {
+        rows.add(['Doctor Name', 'Total Referrals', 'Completed', 'Pending']);
+        for (final row in dataR) {
+          rows.add([
+            row['doctorName'] ?? '',
+            '${row['totalReferrals'] ?? 0}',
+            '${row['completed'] ?? 0}',
+            '${row['pending'] ?? 0}',
+          ]);
+        }
+        rows.add(List<String>.filled(4, ''));
+      }
+      if (dataV.isNotEmpty) {
+        rows.add(
+            ['Therapist Name', 'Total Visits', 'This Week', 'Completion Rate']);
+        for (final row in dataV) {
+          rows.add([
+            row['therapistName'] ?? '',
+            '${row['totalVisits'] ?? 0}',
+            '${row['thisWeekVisits'] ?? 0}',
+            '${row['completionRate'] ?? 0}%',
+          ]);
+        }
+        rows.add(List<String>.filled(4, ''));
+      }
+      if (dataF.isNotEmpty) {
+        rows.add(['Patient Name', 'Therapist', 'Last Visit', 'Due Date']);
+        for (final row in dataF) {
+          rows.add([
+            row['patientName'] ?? '',
+            row['therapistName'] ?? '',
+            row['lastVisitDate'] ?? '',
+            row['dueDate'] ?? '',
+          ]);
+        }
+        rows.add(List<String>.filled(4, ''));
+      }
+      if (revenue.isNotEmpty) {
+        rows.add(['Metric', 'This Week', 'This Month']);
+        rows.add([
+          'Revenue',
+          '₹${revenue['thisWeek'] ?? 0}',
+          '₹${revenue['thisMonth'] ?? 0}'
+        ]);
+        rows.add([
+          'Visits',
+          '${revenue['thisWeekVisits'] ?? 0}',
+          '${revenue['thisMonthVisits'] ?? 0}'
+        ]);
+        rows.add(List<String>.filled(3, ''));
+      }
     }
-
-    // Safe: clone each row before appending
-    for (var row in rows.map((e) => List<String>.from(e))) {
-      sheet.appendRow(row);
-    }
-
-    final fileName = '${sheetName}_${DateTime
-        .now()
-        .millisecondsSinceEpoch}.xlsx';
-    final excelBytes = excel.encode()!;
-    final blob = html.Blob([excelBytes],
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    final url = html.Url.createObjectUrlFromBlob(blob);
-    final anchor = html.AnchorElement(href: url)
-      ..setAttribute('download', fileName)
-      ..click();
+    return rows;
   }
 
-  /// Export the selected report as an Excel file with robust safety and clarity.
   void _exportToExcel(BuildContext context,
       AdminFirebaseService firebaseService) async {
     final bool confirm = await showDialog<bool>(
@@ -736,25 +766,32 @@ class _ReportsTabState extends State<ReportsTab> {
             ],
           ),
     ) ?? false;
-
     if (!confirm) return;
-
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => const Center(child: CircularProgressIndicator()),
     );
-
     try {
-      final exportData = await firebaseService.getExportData(
-        reportType: _selectedReportType,
-        period: _selectedPeriod,
-      );
-
-      print('EXPORT DEBUG exportData: $exportData');
+      final rows = buildExportRows(firebaseService, _selectedReportType);
+      final excel = xls.Excel.createExcel();
+      final String sheetName = _selectedReportType.replaceAll(' ', '_');
+      excel.rename('Sheet1', sheetName);
+      final xls.Sheet sheet = excel[sheetName];
+      for (final row in rows) {
+        sheet.appendRow(List<String>.from(row));
+      }
+      final fileName = '${sheetName}_${DateTime
+          .now()
+          .millisecondsSinceEpoch}.xlsx';
       if (kIsWeb) {
-        // On web, trigger web-safe Excel export & download and exit.
-        exportToExcelForWeb(exportData, _selectedReportType);
+        final excelBytes = excel.encode()!;
+        final blob = html.Blob([excelBytes],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement(href: url)
+          ..setAttribute('download', fileName)
+          ..click();
         if (Navigator.of(context).canPop()) Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Excel file downloaded.'),
@@ -762,168 +799,13 @@ class _ReportsTabState extends State<ReportsTab> {
         ));
         return;
       }
-
-      final excel = xls.Excel.createExcel();
-      final String sheetName = _selectedReportType.replaceAll(' ', '_');
-      excel.rename('Sheet1', sheetName);
-      final xls.Sheet sheet = excel[sheetName];
-
-      List<List<String>> tableRows = <List<String>>[];
-
-      if (_selectedReportType == 'Referrals by Doctor') {
-        tableRows.add(['Doctor Name', 'Total Referrals', 'Completed', 'Pending']);
-        final referralsData = (exportData['data'] as List<dynamic>? ?? [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-
-        for (var row in referralsData) {
-          tableRows.add([
-            row['doctorName'] ?? '',
-            '${row['totalReferrals'] ?? 0}',
-            '${row['completed'] ?? 0}',
-            '${row['pending'] ?? 0}',
-          ]);
-        }
-
-      } else if (_selectedReportType == 'Visits by Therapist') {
-        tableRows.add(['Therapist Name', 'Total Visits', 'This Week', 'Completion Rate']);
-        final visitsData = (exportData['data'] as List<dynamic>? ?? [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-
-        for (var row in visitsData) {
-          tableRows.add([
-            row['therapistName'] ?? '',
-            '${row['totalVisits'] ?? 0}',
-            '${row['thisWeekVisits'] ?? 0}',
-            '${row['completionRate'] ?? 0}%',
-          ]);
-        }
-
-      } else if (_selectedReportType == 'Pending Follow-ups') {
-        tableRows.add(['Patient Name', 'Therapist', 'Last Visit', 'Due Date']);
-        final followupsData = (exportData['data'] as List<dynamic>? ?? [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-
-        for (var row in followupsData) {
-          tableRows.add([
-            row['patientName'] ?? '',
-            row['therapistName'] ?? '',
-            row['lastVisitDate'] ?? '',
-            row['dueDate'] ?? '',
-          ]);
-        }
-
-      } else if (_selectedReportType == 'Revenue Report') {
-        tableRows.add(['Metric', 'This Week', 'This Month']);
-        final revenue = Map<String, dynamic>.from(exportData['data'] ?? {});
-
-        tableRows.add([
-          'Revenue',
-          '₹${revenue['thisWeek'] ?? 0}',
-          '₹${revenue['thisMonth'] ?? 0}',
-        ]);
-        tableRows.add([
-          'Visits',
-          '${revenue['thisWeekVisits'] ?? 0}',
-          '${revenue['thisMonthVisits'] ?? 0}',
-        ]);
-
-      } else {
-        // All Reports
-        if (exportData['referrals'] != null) {
-          tableRows.add(
-              ['Doctor Name', 'Total Referrals', 'Completed', 'Pending']);
-          final referralsData = (exportData['referrals'] as List<dynamic>)
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList();
-
-          for (var row in referralsData) {
-            tableRows.add([
-              row['doctorName'] ?? '',
-              '${row['totalReferrals'] ?? 0}',
-              '${row['completed'] ?? 0}',
-              '${row['pending'] ?? 0}',
-            ]);
-          }
-          tableRows.add(List<String>.filled(4, ''));
-        }
-
-        if (exportData['visits'] != null) {
-          tableRows.add([
-            'Therapist Name',
-            'Total Visits',
-            'This Week',
-            'Completion Rate'
-          ]);
-          final visitsData = (exportData['visits'] as List<dynamic>)
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList();
-
-          for (var row in visitsData) {
-            tableRows.add([
-              row['therapistName'] ?? '',
-              '${row['totalVisits'] ?? 0}',
-              '${row['thisWeekVisits'] ?? 0}',
-              '${row['completionRate'] ?? 0}%',
-            ]);
-          }
-          tableRows.add(List<String>.filled(4, ''));
-        }
-
-        if (exportData['followups'] != null) {
-          tableRows.add(
-              ['Patient Name', 'Therapist', 'Last Visit', 'Due Date']);
-          final followupsData = (exportData['followups'] as List<dynamic>)
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList();
-
-          for (var row in followupsData) {
-            tableRows.add([
-              row['patientName'] ?? '',
-              row['therapistName'] ?? '',
-              row['lastVisitDate'] ?? '',
-              row['dueDate'] ?? '',
-            ]);
-          }
-          tableRows.add(List<String>.filled(4, ''));
-        }
-
-        if (exportData['revenue'] != null) {
-          tableRows.add(['Metric', 'This Week', 'This Month']);
-          final revenue = Map<String, dynamic>.from(exportData['revenue']);
-          tableRows.add([
-            'Revenue',
-            '₹${revenue['thisWeek'] ?? 0}',
-            '₹${revenue['thisMonth'] ?? 0}',
-          ]);
-          tableRows.add([
-            'Visits',
-            '${revenue['thisWeekVisits'] ?? 0}',
-            '${revenue['thisMonthVisits'] ?? 0}',
-          ]);
-        }
-      }
-
-      // Always pass a fresh mutable list to appendRow to avoid unmodifiable list errors
-      for (var row in tableRows.map((e) => List<String>.from(e))) {
-        sheet.appendRow(row);
-      }
-
-      final fileName = '${sheetName}_${DateTime
-          .now()
-          .millisecondsSinceEpoch}.xlsx';
-
       Directory? directory;
       String? realPath;
       bool hasPermission = true;
-
       if (Platform.isAndroid) {
         final status = await Permission.manageExternalStorage.request();
         if (!status.isGranted) hasPermission = false;
       }
-
       if (hasPermission) {
         if (Platform.isAndroid) {
           directory = Directory('/storage/emulated/0/Download');
@@ -935,14 +817,11 @@ class _ReportsTabState extends State<ReportsTab> {
           directory = await getDownloadsDirectory() ??
               await getApplicationDocumentsDirectory();
         }
-
         final file = File('${directory!.path}/$fileName');
         await file.writeAsBytes(excel.encode() as List<int>);
         realPath = file.path;
       }
-
       if (Navigator.of(context).canPop()) Navigator.of(context).pop();
-
       if (hasPermission) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Exported: $fileName\nPath: $realPath'),
@@ -964,203 +843,48 @@ class _ReportsTabState extends State<ReportsTab> {
     }
   }
 
-  String _getExportSummary(Map<String, dynamic> exportData) {
-    switch (_selectedReportType) {
-      case 'Referrals by Doctor':
-        final data = exportData['data'] as List? ?? [];
-        return 'Exported ${data.length} doctor records';
-      case 'Visits by Therapist':
-        final data = exportData['data'] as List? ?? [];
-        return 'Exported ${data.length} therapist records';
-      case 'Pending Follow-ups':
-        final data = exportData['data'] as List? ?? [];
-        return 'Exported ${data.length} pending follow-ups';
-      case 'Revenue Report':
-        final summary = exportData['summary'] as Map? ?? {};
-        return 'Total Revenue: ₹${summary['thisMonthRevenue'] ?? 0}';
-      default:
-        return 'Complete report exported successfully';
-    }
-  }
-
-  /// Exports the current report as a PDF and triggers download or print-preview (web/mobile/desktop)
   Future<void> _exportToPDF(BuildContext context,
       AdminFirebaseService firebaseService) async {
-    // Show loading dialog
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => const Center(child: CircularProgressIndicator()),
     );
     try {
-      final exportData = await firebaseService.getExportData(
-        reportType: _selectedReportType,
-        period: _selectedPeriod,
-      );
-
-      // Create PDF document
+      final rows = buildExportRows(firebaseService, _selectedReportType);
+      final fontData = await rootBundle.load(
+          'assets/fonts/NotoSans-Regular.ttf');
+      final ttf = pw.Font.ttf(fontData.buffer.asByteData());
       final pdf = pw.Document();
-      final String periodLabel = _selectedPeriod;
-      // Determine report content & structure
-      List<List<String>> pdfRows = [];
-      String title = _selectedReportType;
-      if (_selectedReportType == 'Referrals by Doctor') {
-        pdfRows.add(['Doctor Name', 'Total Referrals', 'Completed', 'Pending']);
-        final referralsData = (exportData['data'] as List<dynamic>? ?? [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-        for (var row in referralsData) {
-          pdfRows.add([
-            row['doctorName'] ?? '',
-            '${row['totalReferrals'] ?? 0}',
-            '${row['completed'] ?? 0}',
-            '${row['pending'] ?? 0}',
-          ]);
-        }
-      } else if (_selectedReportType == 'Visits by Therapist') {
-        pdfRows.add([
-          'Therapist Name', 'Total Visits', 'This Week', 'Completion Rate'
-        ]);
-        final visitsData = (exportData['data'] as List<dynamic>? ?? [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-        for (var row in visitsData) {
-          pdfRows.add([
-            row['therapistName'] ?? '',
-            '${row['totalVisits'] ?? 0}',
-            '${row['thisWeekVisits'] ?? 0}',
-            '${row['completionRate'] ?? 0}%',
-          ]);
-        }
-      } else if (_selectedReportType == 'Pending Follow-ups') {
-        pdfRows.add([
-          'Patient Name', 'Therapist', 'Last Visit', 'Due Date'
-        ]);
-        final followupsData = (exportData['data'] as List<dynamic>? ?? [])
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-        for (var row in followupsData) {
-          pdfRows.add([
-            row['patientName'] ?? '',
-            row['therapistName'] ?? '',
-            row['lastVisitDate'] ?? '',
-            row['dueDate'] ?? '',
-          ]);
-        }
-      } else if (_selectedReportType == 'Revenue Report') {
-        pdfRows.add(['Metric', 'This Week', 'This Month']);
-        final revenue = Map<String, dynamic>.from(exportData['data'] ?? {});
-        pdfRows.add([
-          'Revenue',
-          '₹${revenue['thisWeek'] ?? 0}',
-          '₹${revenue['thisMonth'] ?? 0}',
-        ]);
-        pdfRows.add([
-          'Visits',
-          '${revenue['thisWeekVisits'] ?? 0}',
-          '${revenue['thisMonthVisits'] ?? 0}',
-        ]);
-      } else {
-        // All Reports: list each table one after another
-        if (exportData['referrals'] != null) {
-          pdfRows.add(
-              ['Doctor Name', 'Total Referrals', 'Completed', 'Pending']);
-          final referralsData = (exportData['referrals'] as List<dynamic>)
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList();
-          for (var row in referralsData) {
-            pdfRows.add([
-              row['doctorName'] ?? '',
-              '${row['totalReferrals'] ?? 0}',
-              '${row['completed'] ?? 0}',
-              '${row['pending'] ?? 0}',
-            ]);
-          }
-          pdfRows.add([]); // add space before next table
-        }
-        if (exportData['visits'] != null) {
-          pdfRows.add([
-            'Therapist Name', 'Total Visits', 'This Week', 'Completion Rate']);
-          final visitsData = (exportData['visits'] as List<dynamic>)
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList();
-          for (var row in visitsData) {
-            pdfRows.add([
-              row['therapistName'] ?? '',
-              '${row['totalVisits'] ?? 0}',
-              '${row['thisWeekVisits'] ?? 0}',
-              '${row['completionRate'] ?? 0}%'
-            ]);
-          }
-          pdfRows.add([]);
-        }
-        if (exportData['followups'] != null) {
-          pdfRows.add([
-            'Patient Name', 'Therapist', 'Last Visit', 'Due Date']);
-          final followupsData = (exportData['followups'] as List<dynamic>)
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList();
-          for (var row in followupsData) {
-            pdfRows.add([
-              row['patientName'] ?? '',
-              row['therapistName'] ?? '',
-              row['lastVisitDate'] ?? '',
-              row['dueDate'] ?? ''
-            ]);
-          }
-          pdfRows.add([]);
-        }
-        if (exportData['revenue'] != null) {
-          pdfRows.add(['Metric', 'This Week', 'This Month']);
-          final revenue = Map<String, dynamic>.from(exportData['revenue']);
-          pdfRows.add([
-            'Revenue',
-            '₹${revenue['thisWeek'] ?? 0}',
-            '₹${revenue['thisMonth'] ?? 0}'
-          ]);
-          pdfRows.add([
-            'Visits',
-            '${revenue['thisWeekVisits'] ?? 0}',
-            '${revenue['thisMonthVisits'] ?? 0}'
-          ]);
-        }
-      }
-
-      // Add PDF content
       pdf.addPage(
         pw.MultiPage(
-            build: (context) =>
-            [
-              pw.Text('$_selectedReportType ($_selectedPeriod)',
-                  style: pw.TextStyle(
-                      fontSize: 18, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 10),
-              // Table
-              pw.Table.fromTextArray(
-                headers: pdfRows.isNotEmpty ? pdfRows[0] : [],
-                data: pdfRows.length > 1 ? pdfRows.sublist(1).where((row) =>
-                row.isNotEmpty).toList() : [],
-                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                headerDecoration: pw.BoxDecoration(
-                    color: PdfColor.fromHex('#E3F2FD')),
-                cellAlignment: pw.Alignment.centerLeft,
-                cellStyle: pw.TextStyle(fontSize: 11),
-              ),
-            ]
+          build: (context) =>
+          [
+            pw.Text('$_selectedReportType ($_selectedPeriod)',
+                style: pw.TextStyle(
+                    font: ttf, fontSize: 18, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 10),
+            pw.Table.fromTextArray(
+              headers: rows.isNotEmpty ? rows[0] : [],
+              data: rows.length > 1 ? rows.sublist(1).where((row) =>
+              row.isNotEmpty).toList() : [],
+              headerStyle: pw.TextStyle(
+                  font: ttf, fontWeight: pw.FontWeight.bold),
+              cellStyle: pw.TextStyle(font: ttf, fontSize: 11),
+              headerDecoration: pw.BoxDecoration(
+                  color: PdfColor.fromHex('#E3F2FD')),
+              cellAlignment: pw.Alignment.centerLeft,
+            ),
+          ],
         ),
       );
-
-      // Dismiss dialog
       if (Navigator.of(context).canPop()) Navigator.of(context).pop();
-
-      // Trigger download/preview dialog
       await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => pdf.save(),
         name: '${_selectedReportType.replaceAll(' ', '_')}_${DateTime
             .now()
             .millisecondsSinceEpoch}.pdf',
       );
-
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('PDF file exported.'),
         backgroundColor: Colors.green,
