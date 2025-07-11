@@ -39,10 +39,33 @@ class _AdminLoginState extends State<AdminLogin> {
 
   Future<void> _signInWithGoogle() async {
     final authService = Provider.of<AdminAuthService>(context, listen: false);
-    final success = await authService.signInWithGoogle();
+    
+    try {
+      // Show a loading indicator
+      setState(() {});
+      
+      // Attempt Google Sign-In
+      final success = await authService.signInWithGoogle();
 
-    if (!success && authService.errorMessage != null) {
-      _showErrorSnackBar(authService.errorMessage!);
+      if (mounted) {
+        if (!success && authService.errorMessage != null) {
+          // Show specific error message from auth service
+          _showErrorSnackBar(authService.errorMessage!);
+          
+          // Log the error for debugging
+          debugPrint('Google Sign-In error: ${authService.errorMessage}');
+        } else if (!success) {
+          // Generic error message if no specific message is available
+          _showErrorSnackBar('Google Sign-In failed. Please try again.');
+        }
+        // Success message is not needed as the user will be redirected to the dashboard
+      }
+    } catch (e) {
+      if (mounted) {
+        // Handle any unexpected exceptions
+        _showErrorSnackBar('Google Sign-In failed: ${e.toString()}');
+        debugPrint('Google Sign-In exception: $e');
+      }
     }
   }
 
@@ -292,13 +315,10 @@ class _AdminLoginState extends State<AdminLogin> {
 
                             const SizedBox(height: 16),
 
-                            // Google Sign In (only if available)
+                            // Google Sign In
                             Consumer<AdminAuthService>(
                               builder: (context, authService, child) {
-                                if (!authService.isGoogleSignInAvailable) {
-                                  return const SizedBox.shrink();
-                                }
-
+                                // Always show Google Sign-In option
                                 return Column(
                                   children: [
                                     // Divider
@@ -325,9 +345,21 @@ class _AdminLoginState extends State<AdminLogin> {
                                     const SizedBox(height: 16),
 
                                     // Google Sign In Button
-                                    SizedBox(
+                                    Container(
                                       width: double.infinity,
                                       height: 50,
+                                      margin: const EdgeInsets.symmetric(vertical: 4),
+                                      decoration: BoxDecoration(
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.grey.withOpacity(0.2),
+                                            spreadRadius: 1,
+                                            blurRadius: 3,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
                                       child: OutlinedButton.icon(
                                         onPressed: authService.isLoading
                                             ? null
@@ -339,21 +371,30 @@ class _AdminLoginState extends State<AdminLogin> {
                                           child: CircularProgressIndicator(
                                               strokeWidth: 2),
                                         )
-                                            : const Icon(Icons.login, size: 20),
-                                        label: const Text(
-                                          'Continue with Google',
-                                          style: TextStyle(
+                                            : Image.asset(
+                                          'assets/images/google_logo.png',
+                                          height: 24,
+                                          width: 24,
+                                        ),
+                                        label: Text(
+                                          authService.isLoading 
+                                              ? 'Signing in with Google...'
+                                              : 'Continue with Google',
+                                          style: const TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
                                         style: OutlinedButton.styleFrom(
+                                          backgroundColor: Colors.white,
                                           side: BorderSide(
                                               color: Colors.grey[300]!),
                                           foregroundColor: Colors.grey[700],
+                                          elevation: 2,
+                                          shadowColor: Colors.grey[200],
+                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                           shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                                12),
+                                            borderRadius: BorderRadius.circular(12),
                                           ),
                                         ),
                                       ),
@@ -428,7 +469,7 @@ class _AdminLoginState extends State<AdminLogin> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '• Email/Password login is always available\n• Google Sign-In requires additional setup\n• Admin accounts stored separately from users',
+                              '• Email/Password login is always available\n• Google Sign-In provides secure one-click access\n• Admin accounts stored separately from users',
                               style: TextStyle(
                                 fontSize: 11,
                                 color: Colors.blue[700],

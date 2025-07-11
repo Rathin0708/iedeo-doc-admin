@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/admin_auth_service.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:google_sign_in_web/google_sign_in_web.dart'; // Import the official Google Sign-In button for web
 
 class AdminSignup extends StatefulWidget {
   const AdminSignup({super.key});
@@ -359,6 +362,113 @@ class _AdminSignupState extends State<AdminSignup> {
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+
+                          const SizedBox(height: 24),
+
+                          // Divider for OR
+                          Row(
+                            children: [
+                              Expanded(child: Divider(color: Colors.grey[300])),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16),
+                                child: Text(
+                                  'OR',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              Expanded(child: Divider(color: Colors.grey[300])),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Google Sign Up Button (all platforms)
+                          Consumer<AdminAuthService>(
+                            builder: (context, authService, child) {
+                              return Container(
+                                width: double.infinity,
+                                height: 50,
+                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                decoration: BoxDecoration(
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.grey.withOpacity(0.2),
+                                      spreadRadius: 1,
+                                      blurRadius: 3,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: OutlinedButton.icon(
+                                  icon: authService.isLoading
+                                      ? const SizedBox(
+                                    width: 20, height: 20,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                      : Image.asset(
+                                    'assets/images/google_logo.png',
+                                    height: 24,
+                                    width: 24,
+                                  ),
+                                  label: Text(
+                                    authService.isLoading
+                                        ? 'Creating account with Google...'
+                                        : 'Sign Up with Google',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  onPressed: authService.isLoading
+                                      ? null
+                                      : () async {
+                                    try {
+                                      // Show loading state
+                                      setState(() {});
+                                      
+                                      // Trigger Google sign-in/signup for all platforms
+                                      bool success = await authService.signInWithGoogle();
+                                      
+                                      if (mounted) {
+                                        if (success) {
+                                          // Navigate directly to dashboard instead of showing success dialog
+                                          // No need to do anything as the AuthWrapper will automatically redirect
+                                          // when authService.isAuthenticated becomes true
+                                          debugPrint('Google Sign-Up successful - redirecting to dashboard');
+                                        } else if (authService.errorMessage != null) {
+                                          _showErrorDialog(authService.errorMessage!);
+                                          debugPrint('Google Sign-Up error: ${authService.errorMessage}');
+                                        } else {
+                                          _showErrorDialog('Google authentication failed. Please try again.');
+                                        }
+                                      }
+                                    } catch (e) {
+                                      if (mounted) {
+                                        _showErrorDialog('Google Sign-Up failed: ${e.toString()}');
+                                        debugPrint('Google Sign-Up exception: $e');
+                                      }
+                                    }
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    backgroundColor: Colors.white,
+                                    side: BorderSide(color: Colors.grey[300]!),
+                                    foregroundColor: Colors.grey[700],
+                                    elevation: 2,
+                                    shadowColor: Colors.grey[200],
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
                                   ),
                                 ),

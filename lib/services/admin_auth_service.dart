@@ -92,22 +92,27 @@ class AdminAuthService extends ChangeNotifier {
     });
   }
 
-  void _initializeGoogleSignIn() {
-    if (_googleSignIn != null) return; // Already initialized
+  Future<void> _initializeGoogleSignIn() async {
+    if (_googleSignIn != null) return;
 
     try {
-      // For web, the client ID should be set in web/index.html meta tag
-      // For mobile, it should be configured in platform-specific files
+      if (kIsWeb) {
+        // For web, we don't need to initialize GoogleSignIn plugin
+        // We'll use Firebase's built-in web authentication
+        _isGoogleSignInAvailable = true;
+        return;
+      }
+      
+      // For mobile platforms
       _googleSignIn = GoogleSignIn(
+        // For Android, it's set in google-services.json
+        // For iOS, it's set in GoogleService-Info.plist
         scopes: ['email', 'profile'],
       );
       _isGoogleSignInAvailable = true;
-      print('✅ Google Sign-In initialized successfully');
     } catch (e) {
-      print('⚠️ Google Sign-In initialization failed: $e');
+      print('Error initializing Google Sign-In: $e');
       _isGoogleSignInAvailable = false;
-      _googleSignIn = null;
-
       // Provide helpful error message for web
       if (kIsWeb && e.toString().contains('ClientID not set')) {
         print('💡 To fix: Add Google OAuth client ID to web/index.html');
@@ -290,71 +295,110 @@ class AdminAuthService extends ChangeNotifier {
   }
 
   Future<bool> signInWithGoogle() async {
-    await _ensureGoogleSignInInitialized();
-
-    if (!_isGoogleSignInAvailable || _googleSignIn == null) {
-      _errorMessage = kIsWeb
-          ? 'Google Sign-In not configured. Please add client ID to web/index.html'
-          : 'Google Sign-In not available';
-      notifyListeners();
-      return false;
-    }
-
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      GoogleSignInAccount? googleUser;
-
+      User? user;
+      
+      // For web platform, use Firebase's built-in Google auth directly
       if (kIsWeb) {
-        googleUser = await _googleSignIn!.signInSilently();
-        googleUser ??= await _googleSignIn!.signIn();
+        try {
+          // Set persistence to LOCAL for better user experience
+          await _auth.setPersistence(Persistence.LOCAL);
+          
+          // Create a Google Auth Provider
+          GoogleAuthProvider googleProvider = GoogleAuthProvider();
+          googleProvider.addScope('email');
+          googleProvider.addScope('profile');
+          
+          // Try popup method first as it's more reliable for debugging
+          try {
+            final UserCredential userCredential = await _auth.signInWithPopup(googleProvider);
+            user = userCredential.user;
+            debugPrint('Google sign-in with popup successful');
+          } catch (popupError) {
+            debugPrint('Popup auth failed, trying redirect: $popupError');
+            
+            // Fallback to redirect if popup fails
+            await _auth.signInWithRedirect(googleProvider);
+            final userCredential = await _auth.getRedirectResult();
+            user = userCredential.user;
+            debugPrint('Google sign-in with redirect successful');
+          }
+        } catch (webAuthError) {
+          debugPrint('Web auth completely failed: $webAuthError');
+          _errorMessage = 'Google sign-in failed: ${webAuthError.toString()}';
+          return false;
+        }
       } else {
-        googleUser = await _googleSignIn!.signIn();
+        // Mobile authentication flow
+        await _ensureGoogleSignInInitialized();
+
+        if (!_isGoogleSignInAvailable || _googleSignIn == null) {
+          _errorMessage = 'Google Sign-In not available on this device';
+          notifyListeners();
+          return false;
+        }
+
+        try {
+          final GoogleSignInAccount? googleUser = await _googleSignIn!.signIn();
+
+          if (googleUser == null) {
+            _errorMessage = 'Sign in canceled by user';
+            return false;
+          }
+
+          final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+          if (googleAuth.accessToken == null) {
+            _errorMessage = 'Failed to get Google access token';
+            return false;
+          }
+
+          final credential = GoogleAuthProvider.credential(
+            accessToken: googleAuth.accessToken,
+            idToken: googleAuth.idToken,
+          );
+
+          final UserCredential result = await _auth.signInWithCredential(credential);
+          user = result.user;
+          debugPrint('Google sign-in on mobile successful');
+        } catch (mobileAuthError) {
+          debugPrint('Mobile auth failed: $mobileAuthError');
+          _errorMessage = 'Google sign-in failed: ${mobileAuthError.toString()}';
+          return false;
+        }
       }
 
-      if (googleUser == null) return false;
-
-      final GoogleSignInAuthentication googleAuth = await googleUser
-          .authentication;
-
-      if (googleAuth.accessToken == null) {
-        _errorMessage = 'Failed to get Google access token';
-        return false;
-      }
-
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      final UserCredential result = await _auth.signInWithCredential(
-          credential);
-
-      if (result.user != null) {
-        // INSTANT session creation
-        _createInstantSession(result.user!);
-
-        // Create Firebase admin doc in background
-        _createAdminFromGoogleInBackground(result.user!);
-
+      // If we have a user at this point, authentication succeeded
+      if (user != null) {
+        // Create session immediately for responsive UI
+        _createInstantSession(user);
+        
+        // Try to create admin document in background, but don't fail if it doesn't work
+        try {
+          await _createAdminFromGoogleInBackground(user);
+        } catch (dbError) {
+          // Just log the error but don't fail the sign-in
+          debugPrint('Admin document creation failed (non-blocking): $dbError');
+        }
+        
         return true;
       }
+      
+      _errorMessage = 'Failed to authenticate with Google';
       return false;
     } catch (e) {
-      if (e.toString().contains('ClientID not set')) {
-        _errorMessage =
-        'Google Sign-In not configured. Please contact administrator.';
-      } else {
-        _errorMessage = 'Google sign-in failed: ${e.toString()}';
-      }
+      debugPrint('Google sign-in unexpected error: $e');
+      _errorMessage = 'Google sign-in failed: ${e.toString()}';
       _isAuthenticated = false;
+      return false;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
-    return false;
   }
 
   Future<void> signOut() async {
@@ -443,22 +487,87 @@ class AdminAuthService extends ChangeNotifier {
 
   Future<void> _createAdminFromGoogleInBackground(User user) async {
     try {
-      await _firestore.collection('admins').doc(user.uid).set({
+      // Create a security rules-compliant admin document
+      final adminData = {
         'uid': user.uid,
         'name': user.displayName ?? 'Google User',
         'email': user.email ?? '',
-        'role': 'admin',
-        'status': 'active',
+        'role': 'admin', // Default role for Google sign-ups
+        'status': 'pending', // Start as pending until verified
         'createdAt': FieldValue.serverTimestamp(),
         'lastLogin': FieldValue.serverTimestamp(),
         'authProvider': 'google',
-      }).timeout(const Duration(seconds: 5));
-
-      print('✅ Google admin document created in background');
+        'photoURL': user.photoURL ?? '',
+        'emailVerified': user.emailVerified,
+        'phoneNumber': user.phoneNumber ?? '',
+        // Additional fields for better user management
+        'registrationMethod': 'google',
+        'registrationCompleted': true,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      };
+      
+      // Use transaction to handle permission issues
+      await _firestore.runTransaction((transaction) async {
+        // First check if this admin already exists
+        final docRef = _firestore.collection('admins').doc(user.uid);
+        final docSnapshot = await transaction.get(docRef);
+        
+        if (docSnapshot.exists) {
+          // Admin already exists, just update the lastLogin and other relevant fields
+          transaction.update(docRef, {
+            'lastLogin': FieldValue.serverTimestamp(),
+            'photoURL': user.photoURL ?? '',
+            'emailVerified': user.emailVerified,
+            'name': user.displayName ?? docSnapshot.data()?['name'] ?? 'Google User',
+            'authProvider': 'google',
+          });
+          
+          debugPrint('✅ Google admin login updated in transaction');
+        } else {
+          // Create new admin document
+          transaction.set(docRef, adminData);
+          
+          // Create a public profile document that has less restrictive permissions
+          final profileRef = _firestore.collection('admin_profiles').doc(user.uid);
+          transaction.set(profileRef, {
+            'uid': user.uid,
+            'displayName': user.displayName ?? 'Google User',
+            'email': user.email ?? '',
+            'photoURL': user.photoURL ?? '',
+            'createdAt': FieldValue.serverTimestamp(),
+            'isGoogleUser': true,
+            'preferences': {
+              'theme': 'light',
+              'notifications': true,
+            }
+          });
+          
+          debugPrint('✅ Google admin document created in transaction');
+        }
+      }).timeout(const Duration(seconds: 15));
+      
     } catch (e) {
-      print('🔄 Background Google admin creation failed (non-blocking): $e');
+      // Don't fail the sign-in process if Firestore operations fail
+      debugPrint('🔄 Background Google admin creation failed (non-blocking): $e');
+      
+      // Try a simpler approach with just the essential fields if transaction failed
+      try {
+        await _firestore.collection('admin_profiles').doc(user.uid).set({
+          'uid': user.uid,
+          'displayName': user.displayName ?? 'Google User',
+          'email': user.email ?? '',
+          'isGoogleUser': true,
+          'createdAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true)).timeout(const Duration(seconds: 5));
+        
+        debugPrint('✅ Fallback profile created for Google user');
+      } catch (fallbackError) {
+        debugPrint('❌ Even fallback profile creation failed: $fallbackError');
+      }
     }
   }
+  
+  // Note: Using _createInstantSession instead for session updates
 
   String _getAuthErrorMessage(String code) {
     switch (code) {

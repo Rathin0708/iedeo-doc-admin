@@ -24,6 +24,11 @@ void main() async {
       measurementId: "G-4B041WFCZV",
     ),
   );
+  
+  // Pre-initialize auth services for faster startup
+  if (kDebugMode) {
+    print('🔐 Pre-initializing authentication services...');
+  }
 
   // Configure Firestore
   try {
