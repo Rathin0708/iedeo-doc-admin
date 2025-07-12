@@ -6,6 +6,7 @@ import '../widgets/users_management_tab.dart';
 import '../widgets/reports_tab.dart';
 import '../screens/setting_screen.dart';
 import '../screens/admin_dashboard.dart';
+import '../screens/visits_screen.dart';
 
 /// Centralised route names used by the sidebar navigation.
 const Map<int, String> _routeMap = {
@@ -32,7 +33,7 @@ class _AdminShellState extends State<AdminShell> {
   final List<Widget> _pages = [
     DashboardBody(),
     const PatientAssignmentTab(),
-    const VisitsScreenBody(),
+    const VisitsScreen(),
     const UsersManagementTab(),
     const ReportsTab(),
     const SettingScreen(),
@@ -73,17 +74,4 @@ class DashboardBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return AdminDashboard(embedded: true);
   }
-}
-
-class VisitsScreenBody extends StatelessWidget {
-  const VisitsScreenBody({super.key});
-  @override
-  Widget build(BuildContext context) =>
-      Center(
-        child: Text('Visits screen – not implemented yet',
-          style: Theme
-              .of(context)
-              .textTheme
-              .headlineSmall,),
-      );
 }

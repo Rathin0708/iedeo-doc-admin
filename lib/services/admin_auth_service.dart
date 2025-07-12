@@ -76,6 +76,10 @@ class AdminAuthService extends ChangeNotifier {
   // For now, treat as configured if initialization succeeded
   bool get isGoogleSignInConfigured => _isGoogleSignInAvailable;
 
+  String? get currentUserUid => _cachedAdmin?.uid;
+  
+  String? get currentUserName => _adminName;
+
   AdminAuthService() {
     _initializeAuth();
     // Don't initialize Google Sign-In immediately to avoid startup crashes

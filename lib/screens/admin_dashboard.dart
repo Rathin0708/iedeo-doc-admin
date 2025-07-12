@@ -8,6 +8,8 @@ import '../widgets/users_management_tab.dart';
 import '../widgets/reports_tab.dart';
 import '../widgets/side_navbar.dart';
 import '../screens/setting_screen.dart';
+import '../services/visit_service.dart';
+import '../models/visit_log.dart';
 
 class AdminDashboard extends StatefulWidget {
   final bool embedded;
@@ -25,6 +27,7 @@ class _AdminDashboardState extends State<AdminDashboard>
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
   final int _selectedNavIndex = 0; // Track selected sidebar item
+  final VisitService visitService = VisitService();
 
   @override
   void initState() {
