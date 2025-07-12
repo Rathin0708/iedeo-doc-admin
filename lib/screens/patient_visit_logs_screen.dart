@@ -26,8 +26,10 @@ class PatientVisitLogsScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(child: Text('Error: \\${snapshot.error}'));
+            print('Firestore error: ${snapshot.error}'); // <-- always prints to terminal/log
+            return Center(child: Text('Error: ${snapshot.error}'));
           }
+
           final visits = snapshot.data?.docs ?? [];
           if (visits.isEmpty) {
             return Center(child: Text('No visits yet for $patientName'));
