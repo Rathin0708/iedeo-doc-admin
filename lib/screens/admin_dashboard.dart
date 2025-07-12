@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/admin_auth_service.dart';
@@ -512,73 +513,73 @@ class _AdminDashboardState extends State<AdminDashboard>
   }
 
   Widget _buildStatisticsSection() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.analytics, color: Colors.grey[700], size: 24),
-              const SizedBox(width: 8),
-              Text(
-                'System Overview',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Consumer<AdminFirebaseService>(
-            builder: (context, firebaseService, child) {
-              final stats = firebaseService.dashboardStats;
+    return Consumer<AdminFirebaseService>(
+      builder: (context, firebaseService, child) {
+        final stats = firebaseService.dashboardStats;
 
-              if (firebaseService.isLoading) {
-                return Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.grey.withOpacity(0.1),
-                        blurRadius: 10,
-                        spreadRadius: 0,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.red[600]!),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Loading System Data...',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
+        if (firebaseService.isLoading) {
+          return Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.1),
+                  blurRadius: 10,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Center(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.red[600]!),
                     ),
                   ),
-                );
-              }
+                  const SizedBox(width: 12),
+                  Text(
+                    'Loading System Data...',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
 
-              return Column(
+        return Container(
+          margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.analytics, color: Colors.grey[700], size: 24),
+                  const SizedBox(width: 8),
+                  Text(
+                    'System Overview',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Column(
                 children: [
                   Row(
                     children: [
@@ -642,11 +643,11 @@ class _AdminDashboardState extends State<AdminDashboard>
                     ],
                   ),
                 ],
-              );
-            },
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -709,4 +710,13 @@ class _AdminDashboardState extends State<AdminDashboard>
     if (widget.embedded) return _buildBody();
     return _buildBody();
   }
+}
+
+Stream<List<Map<String, dynamic>>> getPatientsForTherapist(String therapistId) {
+  return FirebaseFirestore.instance
+      .collection('patients')
+      .where('therapistId', isEqualTo: therapistId)
+      .snapshots()
+      .map((query) =>
+          query.docs.map((doc) => doc.data() as Map<String, dynamic>).toList());
 }

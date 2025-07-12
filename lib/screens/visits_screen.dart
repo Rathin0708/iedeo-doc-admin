@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:iedeo_doc_admin/screens/therapist_assigned_patients_screen.dart';
 import 'package:iedeo_doc_admin/screens/therapist_referrals_screen.dart';
 import '../models/therapist_model.dart';
 import '../services/visit_service.dart';
@@ -43,9 +44,9 @@ class VisitsScreen extends StatelessWidget {
             context,
             MaterialPageRoute(
               builder: (context) =>
-                  TherapistReferralsScreen(
-                    therapistData: data,
+                  TherapistAssignedPatientsScreen(
                     therapistId: userId,
+                    therapistName: displayName,
                   ),
             ),
           );
