@@ -601,7 +601,7 @@ class AdminAuthService extends ChangeNotifier {
   }
 
   /// Updates local cached admin name and notifies listeners.
-  void updateLocalProfile({String? name, String? email}) {
+  void updateLocalProfile({String? name, String? email, required String phone}) {
     if (name != null) _adminName = name;
     if (email != null) _adminEmail = email;
     notifyListeners();

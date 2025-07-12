@@ -8,10 +8,10 @@ class TherapistAssignedPatientsScreen extends StatefulWidget {
   final String therapistName;
 
   const TherapistAssignedPatientsScreen({
-    Key? key,
+    super.key,
     required this.therapistId,
     required this.therapistName
-  }) : super(key: key);
+  });
 
   @override
   State<TherapistAssignedPatientsScreen> createState() =>
