@@ -30,11 +30,50 @@ class TherapistAssignedPatientsScreen extends StatelessWidget {
         itemBuilder: (context, index) {
           final patient = assignedPatients[index];
           return Card(
-            child: ListTile(
-              title: Text(patient.patientName),
-              subtitle: Text('Contact: ${patient.contactInfo ?? ''}'),
+            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Patient Name & Status
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          patient.patientName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ),
+                      Chip(
+                        label: Text(patient.statusDisplayName ?? ''),
+                        backgroundColor: Colors.blue[50],
+                        labelStyle: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue[700]),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Age: ${patient.age}', style: const TextStyle(fontSize: 14)),
+                  const SizedBox(height: 2),
+                  Text('Contact: ${patient.contactInfo ?? ""}', style: const TextStyle(fontSize: 14)),
+                  const SizedBox(height: 2),
+                  Text('Address: ${patient.address}', style: const TextStyle(fontSize: 14)),
+                  const SizedBox(height: 2),
+                  Text('Problem: ${patient.problem}', style: const TextStyle(fontSize: 14)),
+                  const SizedBox(height: 2),
+                  Text('Preferred Time: ${patient.preferredTime}', style: const TextStyle(fontSize: 14)),
+                  const SizedBox(height: 2),
+                  Text('Referred by: ${patient.doctorName}', style: const TextStyle(fontSize: 14)),
+                  const SizedBox(height: 2),
+                  Text('Assigned therapist: ${patient.therapistName}', style: const TextStyle(fontSize: 14)),
+                ],
+              ),
             ),
           );
+
         },
       ),
     );
