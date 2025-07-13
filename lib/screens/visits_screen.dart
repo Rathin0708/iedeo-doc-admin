@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:iedeo_doc_admin/screens/therapist_assigned_patients_screen.dart';
+import 'package:intl/intl.dart';
 
 class VisitsScreen extends StatefulWidget {
   const VisitsScreen({super.key});
@@ -13,6 +14,11 @@ class _VisitsScreenState extends State<VisitsScreen> {
   String _searchQuery = '';
   String _specialization = 'All';
   String _qualification = 'All';
+  String _visitSearch = '';
+  String _visitType = 'All';
+  String _visitStatus = 'All';
+  DateTime? _visitDateFrom;
+  DateTime? _visitDateTo;
 
   // Build therapist card displaying all details (from Firestore user doc)
   Widget _buildTherapistCardFromUser(BuildContext context,
@@ -368,27 +374,205 @@ class _VisitsScreenState extends State<VisitsScreen> {
                   // ----- 2nd Tab: Visit Logs List -----
                   Padding(
                     padding: const EdgeInsets.all(16.0),
-                    child: StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('visits')
-                          .orderBy('visitDate', descending: true)
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-                        if (snapshot.hasError) {
-                          return Center(child: Text('Error: ${snapshot.error}'));
-                        }
-                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                          return const Center(child: Text('No visits found'));
-                        }
-                        return ListView(
-                          children: snapshot.data!.docs
-                              .map((doc) => _buildVisitCard(context, doc))
-                              .toList(),
-                        );
-                      },
+                    child: Column(
+                      children: [
+                        // --- Visit Logs Filters ---
+                        Row(
+                          children: [
+                            // Search TextField
+                            Expanded(
+                              child: TextField(
+                                decoration: InputDecoration(
+                                  hintText: 'Search (Patient, ID, Type)',
+                                  prefixIcon: Icon(Icons.search),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  suffixIcon: _visitSearch.isNotEmpty
+                                      ? IconButton(
+                                    icon: Icon(Icons.clear),
+                                    onPressed: () =>
+                                        setState(() => _visitSearch = ''),
+                                  )
+                                      : null,
+                                ),
+                                onChanged: (text) =>
+                                    setState(() => _visitSearch = text.trim()),
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            // Visit Type Dropdown
+                            DropdownButton<String>(
+                              value: _visitType,
+                              items: [
+                                'All',
+                                'First Visit',
+                                'Follow Up',
+                                'Other',
+                              ]
+                                  .map((type) =>
+                                  DropdownMenuItem(
+                                      value: type, child: Text(type)))
+                                  .toList(),
+                              onChanged: (val) =>
+                                  setState(() => _visitType = val!),
+                              underline: SizedBox(),
+                            ),
+                            SizedBox(width: 8),
+                            // Visit Status Dropdown
+                            DropdownButton<String>(
+                              value: _visitStatus,
+                              items: [
+                                'All',
+                                'Completed',
+                                'Pending',
+                                'Cancelled',
+                              ]
+                                  .map((status) =>
+                                  DropdownMenuItem(
+                                      value: status, child: Text(status)))
+                                  .toList(),
+                              onChanged: (val) =>
+                                  setState(() => _visitStatus = val!),
+                              underline: SizedBox(),
+                            ),
+                          ],
+                        ),
+                        // --- Date Range Filters ---
+                        Row(
+                          children: [
+                            TextButton.icon(
+                              icon: Icon(Icons.calendar_today),
+                              label: Text(_visitDateFrom == null
+                                  ? 'From Date'
+                                  : DateFormat('dd MMM yyyy').format(
+                                  _visitDateFrom!)),
+                              onPressed: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _visitDateFrom ?? DateTime.now(),
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime.now().add(
+                                      const Duration(days: 365)),
+                                );
+                                if (picked != null) setState(() =>
+                                _visitDateFrom = picked);
+                              },
+                            ),
+                            const SizedBox(width: 6),
+                            TextButton.icon(
+                              icon: Icon(Icons.calendar_today),
+                              label: Text(_visitDateTo == null
+                                  ? 'To Date'
+                                  : DateFormat('dd MMM yyyy').format(
+                                  _visitDateTo!)),
+                              onPressed: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _visitDateTo ?? DateTime.now(),
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime.now().add(
+                                      const Duration(days: 365)),
+                                );
+                                if (picked != null) setState(() =>
+                                _visitDateTo = picked);
+                              },
+                            ),
+                            if (_visitDateFrom != null || _visitDateTo != null)
+                              IconButton(
+                                icon: Icon(Icons.clear),
+                                tooltip: 'Clear date filters',
+                                onPressed: () =>
+                                    setState(() {
+                                      _visitDateFrom = null;
+                                      _visitDateTo = null;
+                                    }),
+                              ),
+                          ],
+                        ),
+                        SizedBox(height: 12),
+                        // --- Visits List (filtered) ---
+                        Expanded(
+                          child: StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('visits')
+                                .orderBy('visitDate', descending: true)
+                                .snapshots(),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return const Center(
+                                    child: CircularProgressIndicator());
+                              }
+                              if (snapshot.hasError) {
+                                return Center(
+                                    child: Text('Error: ${snapshot.error}'));
+                              }
+                              if (!snapshot.hasData ||
+                                  snapshot.data!.docs.isEmpty) {
+                                return const Center(
+                                    child: Text('No visits found'));
+                              }
+                              // Filtering logic for visit cards
+                              final filteredVisits = snapshot.data!.docs.where((
+                                  doc) {
+                                final data = doc.data() as Map<String, dynamic>;
+                                final searchVal = _visitSearch.toLowerCase();
+                                final matchesSearch = searchVal.isEmpty
+                                    || (data['patientName'] ?? '')
+                                        .toString()
+                                        .toLowerCase()
+                                        .contains(searchVal)
+                                    || (data['patientId'] ?? '')
+                                        .toString()
+                                        .toLowerCase()
+                                        .contains(searchVal)
+                                    || (data['visitType'] ?? '')
+                                        .toString()
+                                        .toLowerCase()
+                                        .contains(searchVal);
+
+                                final matchesType = _visitType == 'All'
+                                    || (data['visitType'] ?? '') == _visitType;
+
+                                final matchesStatus = _visitStatus == 'All'
+                                    || (data['status'] ?? '') == _visitStatus;
+
+                                // Date range filter logic
+                                // visitDate field is assumed to be ISO yyyy-MM-dd or yyyy-MM-ddTHH:mm:ss
+                                DateTime? visitDate;
+                                final visitDateStr = (data['visitDate'] ?? '')
+                                    .toString();
+                                if (visitDateStr.isNotEmpty) {
+                                  try {
+                                    visitDate = DateTime.tryParse(visitDateStr);
+                                  } catch (_) {
+                                    visitDate = null;
+                                  }
+                                }
+                                bool matchesFrom = _visitDateFrom == null ||
+                                    (visitDate != null &&
+                                        !visitDate.isBefore(_visitDateFrom!));
+                                bool matchesTo = _visitDateTo == null ||
+                                    (visitDate != null &&
+                                        !visitDate.isAfter(_visitDateTo!));
+
+                                return matchesSearch && matchesType &&
+                                    matchesStatus && matchesFrom && matchesTo;
+                              }).toList();
+
+                              if (filteredVisits.isEmpty) {
+                                return const Center(child: Text(
+                                    'No visits match these filters.'));
+                              }
+                              return ListView(
+                                children: filteredVisits.map((doc) =>
+                                    _buildVisitCard(context, doc)).toList(),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
