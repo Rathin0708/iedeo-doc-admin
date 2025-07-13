@@ -377,120 +377,250 @@ class _VisitsScreenState extends State<VisitsScreen> {
                     child: Column(
                       children: [
                         // --- Visit Logs Filters ---
-                        Row(
-                          children: [
-                            // Search TextField
-                            Expanded(
-                              child: TextField(
-                                decoration: InputDecoration(
-                                  hintText: 'Search (Patient, ID, Type)',
-                                  prefixIcon: Icon(Icons.search),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  suffixIcon: _visitSearch.isNotEmpty
-                                      ? IconButton(
-                                    icon: Icon(Icons.clear),
-                                    onPressed: () =>
-                                        setState(() => _visitSearch = ''),
-                                  )
-                                      : null,
+                        Card(
+                          elevation: 2,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Filters row now fills width, not with fixed widths
+                                Row(
+                                  children: [
+                                    // Search field—Expanded (auto width)
+                                    Expanded(
+                                      flex: 2,
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(
+                                            right: 10),
+                                        child: TextField(
+                                          decoration: InputDecoration(
+                                            hintText: 'Search Patient/ID/Type',
+                                            prefixIcon: Icon(Icons.search),
+                                            isDense: true,
+                                            border: OutlineInputBorder(
+                                              borderRadius: BorderRadius
+                                                  .circular(8),
+                                            ),
+                                            suffixIcon: _visitSearch.isNotEmpty
+                                                ? IconButton(
+                                              icon: Icon(Icons.clear),
+                                              tooltip: 'Clear search',
+                                              onPressed: () =>
+                                                  setState(() =>
+                                                  _visitSearch = ''),
+                                            )
+                                                : null,
+                                          ),
+                                          onChanged: (text) =>
+                                              setState(() =>
+                                              _visitSearch = text.trim()),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(width: 10),
+                                    // Visit Type dropdown
+                                    Expanded(
+                                      flex: 1,
+                                      child: DropdownButtonFormField<String>(
+                                        value: _visitType,
+                                        decoration: InputDecoration(
+                                          labelText: 'Visit Type',
+                                          isDense: true,
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                                8),
+                                          ),
+                                        ),
+                                        items: [
+                                          'All',
+                                          'First Visit',
+                                          'Follow Up',
+                                          'Other',
+                                        ]
+                                            .map((type) =>
+                                            DropdownMenuItem(
+                                            value: type, child: Text(type)))
+                                            .toList(),
+                                        onChanged: (val) =>
+                                            setState(() => _visitType = val!),
+                                      ),
+                                    ),
+                                    SizedBox(width: 10),
+                                    // Visit Status dropdown
+                                    Expanded(
+                                      flex: 1,
+                                      child: DropdownButtonFormField<String>(
+                                        value: _visitStatus,
+                                        decoration: InputDecoration(
+                                          labelText: 'Status',
+                                          isDense: true,
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                                8),
+                                          ),
+                                        ),
+                                        items: [
+                                          'All',
+                                          'Completed',
+                                          'Pending',
+                                          'Cancelled',
+                                        ].map((status) =>
+                                            DropdownMenuItem(value: status,
+                                                child: Text(status))).toList(),
+                                        onChanged: (val) =>
+                                            setState(() => _visitStatus = val!),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                onChanged: (text) =>
-                                    setState(() => _visitSearch = text.trim()),
-                              ),
+                                const SizedBox(height: 10),
+                                // Date & Time pickers row (full width)
+                                Row(
+                                  children: [
+                                    // --- From DateTime picker ---
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        icon: Icon(Icons.event),
+                                        label: Text(
+                                          _visitDateFrom == null
+                                              ? 'From Date & Time'
+                                              : DateFormat(
+                                              'dd MMM yyyy, hh:mm a').format(
+                                              _visitDateFrom!),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.teal[800],
+                                          padding: EdgeInsets.symmetric(
+                                              vertical: 10, horizontal: 4),
+                                        ),
+                                        onPressed: () async {
+                                          final date = await showDatePicker(
+                                            context: context,
+                                            initialDate: _visitDateFrom ??
+                                                DateTime.now(),
+                                            firstDate: DateTime(2020),
+                                            lastDate: DateTime.now().add(
+                                                const Duration(days: 365)),
+                                          );
+                                          if (date != null) {
+                                            final time = await showTimePicker(
+                                              context: context,
+                                              initialTime: _visitDateFrom !=
+                                                  null
+                                                  ? TimeOfDay(
+                                                  hour: _visitDateFrom!.hour,
+                                                  minute: _visitDateFrom!
+                                                      .minute)
+                                                  : TimeOfDay(
+                                                  hour: 0, minute: 0),
+                                            );
+                                            setState(() {
+                                              if (time != null) {
+                                                _visitDateFrom = DateTime(
+                                                    date.year, date.month,
+                                                    date.day, time.hour,
+                                                    time.minute);
+                                              } else {
+                                                _visitDateFrom = DateTime(
+                                                    date.year, date.month,
+                                                    date.day, 0, 0);
+                                              }
+                                            });
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                    SizedBox(width: 10),
+                                    // --- To DateTime picker ---
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        icon: Icon(Icons.event),
+                                        label: Text(
+                                          _visitDateTo == null
+                                              ? 'To Date & Time'
+                                              : DateFormat(
+                                              'dd MMM yyyy, hh:mm a').format(
+                                              _visitDateTo!),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.teal[800],
+                                          padding: EdgeInsets.symmetric(
+                                              vertical: 10, horizontal: 4),
+                                        ),
+                                        onPressed: () async {
+                                          final date = await showDatePicker(
+                                            context: context,
+                                            initialDate: _visitDateTo ??
+                                                DateTime.now(),
+                                            firstDate: DateTime(2020),
+                                            lastDate: DateTime.now().add(
+                                                const Duration(days: 365)),
+                                          );
+                                          if (date != null) {
+                                            final time = await showTimePicker(
+                                              context: context,
+                                              initialTime: _visitDateTo != null
+                                                  ? TimeOfDay(
+                                                  hour: _visitDateTo!.hour,
+                                                  minute: _visitDateTo!.minute)
+                                                  : TimeOfDay(
+                                                  hour: 23, minute: 59),
+                                            );
+                                            setState(() {
+                                              if (time != null) {
+                                                _visitDateTo = DateTime(
+                                                    date.year, date.month,
+                                                    date.day, time.hour,
+                                                    time.minute);
+                                              } else {
+                                                _visitDateTo = DateTime(
+                                                    date.year, date.month,
+                                                    date.day, 23, 59);
+                                              }
+                                            });
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                    // Clear all filters button
+                                    if (_visitSearch.isNotEmpty ||
+                                        _visitType != 'All' ||
+                                        _visitStatus != 'All' ||
+                                        _visitDateFrom != null ||
+                                        _visitDateTo != null)
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 4),
+                                        child: Tooltip(
+                                          message: 'Clear all filters',
+                                          child: IconButton(
+                                            icon: Icon(
+                                                Icons.filter_alt_off_rounded,
+                                                color: Colors.redAccent),
+                                            onPressed: () =>
+                                                setState(() {
+                                                  _visitSearch = '';
+                                                  _visitType = 'All';
+                                                  _visitStatus = 'All';
+                                                  _visitDateFrom = null;
+                                                  _visitDateTo = null;
+                                                }),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
                             ),
-                            SizedBox(width: 8),
-                            // Visit Type Dropdown
-                            DropdownButton<String>(
-                              value: _visitType,
-                              items: [
-                                'All',
-                                'First Visit',
-                                'Follow Up',
-                                'Other',
-                              ]
-                                  .map((type) =>
-                                  DropdownMenuItem(
-                                      value: type, child: Text(type)))
-                                  .toList(),
-                              onChanged: (val) =>
-                                  setState(() => _visitType = val!),
-                              underline: SizedBox(),
-                            ),
-                            SizedBox(width: 8),
-                            // Visit Status Dropdown
-                            DropdownButton<String>(
-                              value: _visitStatus,
-                              items: [
-                                'All',
-                                'Completed',
-                                'Pending',
-                                'Cancelled',
-                              ]
-                                  .map((status) =>
-                                  DropdownMenuItem(
-                                      value: status, child: Text(status)))
-                                  .toList(),
-                              onChanged: (val) =>
-                                  setState(() => _visitStatus = val!),
-                              underline: SizedBox(),
-                            ),
-                          ],
+                          ),
                         ),
-                        // --- Date Range Filters ---
-                        Row(
-                          children: [
-                            TextButton.icon(
-                              icon: Icon(Icons.calendar_today),
-                              label: Text(_visitDateFrom == null
-                                  ? 'From Date'
-                                  : DateFormat('dd MMM yyyy').format(
-                                  _visitDateFrom!)),
-                              onPressed: () async {
-                                final picked = await showDatePicker(
-                                  context: context,
-                                  initialDate: _visitDateFrom ?? DateTime.now(),
-                                  firstDate: DateTime(2020),
-                                  lastDate: DateTime.now().add(
-                                      const Duration(days: 365)),
-                                );
-                                if (picked != null) setState(() =>
-                                _visitDateFrom = picked);
-                              },
-                            ),
-                            const SizedBox(width: 6),
-                            TextButton.icon(
-                              icon: Icon(Icons.calendar_today),
-                              label: Text(_visitDateTo == null
-                                  ? 'To Date'
-                                  : DateFormat('dd MMM yyyy').format(
-                                  _visitDateTo!)),
-                              onPressed: () async {
-                                final picked = await showDatePicker(
-                                  context: context,
-                                  initialDate: _visitDateTo ?? DateTime.now(),
-                                  firstDate: DateTime(2020),
-                                  lastDate: DateTime.now().add(
-                                      const Duration(days: 365)),
-                                );
-                                if (picked != null) setState(() =>
-                                _visitDateTo = picked);
-                              },
-                            ),
-                            if (_visitDateFrom != null || _visitDateTo != null)
-                              IconButton(
-                                icon: Icon(Icons.clear),
-                                tooltip: 'Clear date filters',
-                                onPressed: () =>
-                                    setState(() {
-                                      _visitDateFrom = null;
-                                      _visitDateTo = null;
-                                    }),
-                              ),
-                          ],
-                        ),
-                        SizedBox(height: 12),
                         // --- Visits List (filtered) ---
                         Expanded(
                           child: StreamBuilder<QuerySnapshot>(
