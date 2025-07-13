@@ -4,12 +4,12 @@ import 'package:intl/intl.dart';
 
 class PatientVisitLogsScreen extends StatefulWidget {
   final String patientId;
-  final String patientName;
+  final String name;
 
   const PatientVisitLogsScreen({
     Key? key,
     required this.patientId,
-    required this.patientName,
+    required this.name, String? patientName,
   }) : super(key: key);
 
   @override
@@ -67,7 +67,7 @@ class _PatientVisitLogsScreenState extends State<PatientVisitLogsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Visit Logs for ${widget.patientName}'),
+        title: Text('Visit Logs for ${widget.name}'),
         actions: [
           IconButton(
             icon: Icon(_showFilters ? Icons.filter_alt_off : Icons.filter_alt),
@@ -177,7 +177,7 @@ class _PatientVisitLogsScreenState extends State<PatientVisitLogsScreen> {
                     final therapistName = visit['therapistName'] ?? 'N/A';
                     // Guaranteed fallback: if patientName is missing in visit log doc, use the name passed in from parent screen
                     final patientName = visit['patientName'] ??
-                        widget.patientName;
+                        widget.name;
                     final quickNotes = (visit['quickNotes'] as List?)?.join(
                         ', ') ?? 'None';
                     final visitNotes = visit['visitNotes'] ?? '';

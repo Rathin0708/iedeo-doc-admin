@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:iedeo_doc_admin/screens/therapist_assigned_patients_screen.dart';
-import 'package:iedeo_doc_admin/screens/therapist_referrals_screen.dart';
-import '../models/therapist_model.dart';
-import '../services/visit_service.dart';
-import 'therapist_patients_screen.dart';
 
 class VisitsScreen extends StatefulWidget {
-  const VisitsScreen({Key? key}) : super(key: key);
+  const VisitsScreen({super.key});
 
   @override
   State<VisitsScreen> createState() => _VisitsScreenState();
@@ -122,19 +118,6 @@ class _VisitsScreenState extends State<VisitsScreen> {
                   ),
                 ],
               ),
-              // No navigation or button for now, as model doesn't match
-              // Align(
-              //   alignment: Alignment.centerRight,
-              //   child: ElevatedButton.icon(
-              //     onPressed: () => _showTherapistPatients(context, data),
-              //     icon: const Icon(Icons.people),
-              //     label: const Text('View Patients'),
-              //     style: ElevatedButton.styleFrom(
-              //       backgroundColor: Colors.blue,
-              //       foregroundColor: Colors.white,
-              //     ),
-              //   ),
-              // ),
             ],
           ),
         ),
@@ -143,46 +126,8 @@ class _VisitsScreenState extends State<VisitsScreen> {
   }
 
   // Build a card for each visit log document from Firestore
-  Widget _buildVisitLogCard(BuildContext context, DocumentSnapshot visitLog) {
-    final data = visitLog.data() as Map<String, dynamic>;
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8.0),
-      elevation: 2,
-      child: ListTile(
-        leading: const Icon(Icons.history, color: Colors.blueAccent),
-        title: Text(data['description'] ?? 'No description'),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('By:  \t${data['performedBy'] ?? 'Unknown'}'),
-            Text('Type: ${data['type'] ?? ''}'),
-            Text('User ID: ${data['userId'] ?? ''}'),
-            Text('At: ${data['timestamp'] ?? 'No date'}'),
-          ],
-        ),
-        // Add a Resend button on the trailing side
-        trailing: TextButton.icon(
-          icon: const Icon(Icons.refresh, color: Colors.green),
-          label: const Text('Resend'),
-          onPressed: () => _resendVisitLog(visitLog),
-        ),
-      ),
-    );
-  }
 
   // Handler for the resend button; here you can add your resend logic (e.g. notification, email, etc.)
-  void _resendVisitLog(DocumentSnapshot log) {
-    // TODO: Implement your resend logic here, e.g. send a notification, email, etc.
-    // `log.data()` will give you the log contents.
-
-    // Show user feedback
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Resent visit log: ${log.id}'),
-        backgroundColor: Colors.green,
-      ),
-    );
-  }
 
   Widget _buildVisitCard(BuildContext context, DocumentSnapshot visitDoc) {
     final data = visitDoc.data() as Map<String, dynamic>;

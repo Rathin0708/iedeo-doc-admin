@@ -6,11 +6,17 @@ import 'patient_visit_logs_screen.dart';
 class TherapistAssignedPatientsScreen extends StatefulWidget {
   final String therapistId;
   final String therapistName;
+  final String? currentStatus;
+  final String? lastUpdated;
+  final String? lastVisit;
+  final String? preferredDateTime;
+// ... (add to constructor and fromMap/fromJson methods as well)
+
 
   const TherapistAssignedPatientsScreen({
     super.key,
     required this.therapistId,
-    required this.therapistName
+    required this.therapistName, this.currentStatus, this.lastUpdated, this.lastVisit, this.preferredDateTime
   });
 
   @override
@@ -153,64 +159,47 @@ class _TherapistAssignedPatientsScreenState
                         builder: (_) =>
                             PatientVisitLogsScreen(
                                 patientId: patient.id,
-                                patientName: patient.patientName),
+                                patientName: patient.name, name: '',),
                       ),
                     );
                   },
-                  child: Card(
-                    margin: const EdgeInsets.symmetric(
-                        vertical: 8, horizontal: 8),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // --- Patient Name at top ---
-                          Text(
-                            patient.patientName,
-                            style: const TextStyle(fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                                color: Colors.black87),
-                          ),
-                          const SizedBox(height: 8),
-                          // Patient Name & Status
-                          Row(
+                    child: Card(
+                      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(child: SizedBox()),
-                              Chip(
-                                label: Text(patient.statusDisplayName ?? ''),
-                                backgroundColor: Colors.blue[50],
-                                labelStyle: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blue[700]),
+                              Text('Patient Name: ${patient.name}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              Text('Patient ID: ${patient.id}'),
+                              Text('Age: ${patient.age}'),
+                              Text('Address: ${patient.address}'),
+                              Text('Contact Info: ${patient.contactInfo ?? ""}'),
+                              Text('Assigned At: ${patient.assignedAt ?? ""}'),
+                              Text('Created At: ${patient.createdAt ?? ""}'),
+                              Text('Doctor ID: ${patient.doctorId ?? ""}'),
+                              Text('Doctor Name: ${patient.doctorName ?? ""}'),
+                              Text('Follow Up Required: ${patient.followUpRequired == true ? "Yes" : "No"}'),
+                              Text('Preferred Time: ${patient.preferredTime ?? ""}'),
+                              Text('Problem: ${patient.problem}'),
+                              Text('Assigned Therapist: ${patient.therapistName}'),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(child: SizedBox()),
+                                  Chip(
+                                    label: Text(patient.statusDisplayName ?? ''),
+                                    backgroundColor: Colors.blue[50],
+                                    labelStyle: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue[700]),
+                                  ),
+                                ],
                               ),
                             ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text('Age: ${patient.age}',
-                              style: const TextStyle(fontSize: 14)),
-                          const SizedBox(height: 2),
-                          Text('Contact: ${patient.contactInfo ?? ""}',
-                              style: const TextStyle(fontSize: 14)),
-                          const SizedBox(height: 2),
-                          Text('Address: ${patient.address}',
-                              style: const TextStyle(fontSize: 14)),
-                          const SizedBox(height: 2),
-                          Text('Problem: ${patient.problem}',
-                              style: const TextStyle(fontSize: 14)),
-                          const SizedBox(height: 2),
-                          Text('Preferred Time: ${patient.preferredTime}',
-                              style: const TextStyle(fontSize: 14)),
-                          const SizedBox(height: 2),
-                          Text('Referred by: ${patient.doctorName}',
-                              style: const TextStyle(fontSize: 14)),
-                          const SizedBox(height: 2),
-                          Text('Assigned therapist: ${patient.therapistName}',
-                              style: const TextStyle(fontSize: 14)),
-                        ],
+                          )
+
                       ),
-                    ),
-                  ),
+                    )
+
                 );
               },
             ),
