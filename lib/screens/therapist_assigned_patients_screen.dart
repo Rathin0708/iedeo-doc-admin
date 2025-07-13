@@ -165,21 +165,20 @@ class _TherapistAssignedPatientsScreenState
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // --- Patient Name at top ---
+                          Text(
+                            patient.patientName,
+                            style: const TextStyle(fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                color: Colors.black87),
+                          ),
+                          const SizedBox(height: 8),
                           // Patient Name & Status
                           Row(
                             children: [
-                              Expanded(
-                                child: Text(
-                                  patient.patientName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                  ),
-                                ),
-                              ),
+                              Expanded(child: SizedBox()),
                               Chip(
-                                label: Text(
-                                    patient.statusDisplayName ?? ''),
+                                label: Text(patient.statusDisplayName ?? ''),
                                 backgroundColor: Colors.blue[50],
                                 labelStyle: TextStyle(
                                     fontWeight: FontWeight.bold,
@@ -206,8 +205,7 @@ class _TherapistAssignedPatientsScreenState
                           Text('Referred by: ${patient.doctorName}',
                               style: const TextStyle(fontSize: 14)),
                           const SizedBox(height: 2),
-                          Text('Assigned therapist: ${patient
-                              .therapistName}',
+                          Text('Assigned therapist: ${patient.therapistName}',
                               style: const TextStyle(fontSize: 14)),
                         ],
                       ),

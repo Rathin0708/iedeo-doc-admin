@@ -1236,19 +1236,18 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with patient name and status
+            // --- Patient Name at top ---
+            Text(
+              patient.patientName,
+              style: const TextStyle(fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                  color: Colors.black87),
+            ),
+            const SizedBox(height: 8),
+            // Header with patient status only
             Row(
               children: [
-                Expanded(
-                  child: Text(
-                    patient.patientName,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ),
+                Expanded(child: SizedBox()),
                 _buildStatusChip(patient.status, patient.isUnassigned),
               ],
             ),
