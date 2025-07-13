@@ -457,6 +457,27 @@ class AdminAuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sends a password reset email to the given email address. Returns true if sent, false if failed.
+  Future<bool> sendPasswordResetEmail(String email) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      await _auth.sendPasswordResetEmail(email: email.trim());
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } on FirebaseAuthException catch (e) {
+      _errorMessage = _getAuthErrorMessage(e.code);
+    } catch (e) {
+      _errorMessage = 'Reset failed: ${e.toString()}';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+    return false;
+  }
+
   // Background methods (non-blocking)
   Future<void> _updateLastLoginInBackground(String uid) async {
     try {

@@ -169,132 +169,216 @@ class _VisitsScreenState extends State<VisitsScreen> {
     return DefaultTabController(
       length: 2, // Two tabs: Therapists & Visit Logs
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Visits'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Therapists', icon: Icon(Icons.medical_services)),
-              Tab(text: 'Visit Logs', icon: Icon(Icons.history)),
-            ],
-          ),
-        ),
-        body: TabBarView(
+        // AppBar removed as requested
+        body: Column(
           children: [
-            // ----- 1st Tab: Therapist Details List from users collection -----
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
+            Material(
+              color: Color(0xFF4CAF7E), // Match your brand
+              child: const TabBar(
+                labelColor: Colors.white,
+                indicatorColor: Colors.white,
+                tabs: [
+                  Tab(text: 'Therapists', icon: Icon(Icons.medical_services)),
+                  Tab(text: 'Visit Logs', icon: Icon(Icons.history)),
+                ],
+              ),
+            ),
+            Expanded(
+              child: TabBarView(
                 children: [
-                  // --- Search Bar Filter ---
-                  TextField(
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.search),
-                      hintText: 'Search therapists by name, email, phone...',
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () => setState(() => _searchQuery = ''),
-                      )
-                          : null,
+                  // ----- 1st Tab: Therapist Details List from users collection -----
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      children: [
+                        // --- Search Bar Filter ---
+                        TextField(
+                          decoration: InputDecoration(
+                            prefixIcon: const Icon(Icons.search),
+                            hintText: 'Search therapists by name, email, phone...',
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                            suffixIcon: _searchQuery.isNotEmpty
+                                ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () =>
+                                  setState(() => _searchQuery = ''),
+                            )
+                                : null,
+                          ),
+                          onChanged: (text) =>
+                              setState(() => _searchQuery = text.trim()),
+                        ),
+                        const SizedBox(height: 10),
+                        // --- Advanced Filters: Specialization + Qualification ---
+                        FutureBuilder(
+                          future: FirebaseFirestore.instance
+                              .collection('users')
+                              .where('role', isEqualTo: 'therapist')
+                              .get(),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return const Center(
+                                  child: CircularProgressIndicator());
+                            }
+                            if (!snapshot.hasData) {
+                              return const SizedBox.shrink();
+                            }
+                            final users = (snapshot.data as QuerySnapshot).docs;
+                            final specializations = [
+                              'All',
+                              ...{
+                                for (var doc in users)
+                                  ((doc.data() as Map<String,
+                                      dynamic>)['specialization'] ?? '')
+                                      .toString()
+                                      .trim()
+                              }.where((v) => v.isNotEmpty)
+                            ];
+                            final qualifications = [
+                              'All',
+                              ...{
+                                for (var doc in users)
+                                  ((doc.data() as Map<String,
+                                      dynamic>)['qualification'] ?? '')
+                                      .toString()
+                                      .trim()
+                              }.where((v) => v.isNotEmpty)
+                            ];
+                            return Row(
+                              children: [
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    value: _specialization,
+                                    items: specializations
+                                        .map((s) =>
+                                        DropdownMenuItem(
+                                            value: s, child: Text(s)))
+                                        .toList(),
+                                    onChanged: (val) =>
+                                        setState(() => _specialization = val!),
+                                    decoration: InputDecoration(
+                                      labelText: 'Specialization',
+                                      border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                              10)),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    value: _qualification,
+                                    items: qualifications
+                                        .map((q) =>
+                                        DropdownMenuItem(
+                                            value: q, child: Text(q)))
+                                        .toList(),
+                                    onChanged: (val) =>
+                                        setState(() => _qualification = val!),
+                                    decoration: InputDecoration(
+                                      labelText: 'Qualification',
+                                      border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                              10)),
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.clear_all),
+                                  tooltip: 'Clear filters',
+                                  onPressed: () =>
+                                      setState(() {
+                                        _specialization = 'All';
+                                        _qualification = 'All';
+                                        _searchQuery = '';
+                                      }),
+                                )
+                              ],
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 15),
+                        // --- Therapist List (Filtered) ---
+                        Expanded(
+                          child: StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('users')
+                                .where('role', isEqualTo: 'therapist')
+                                .snapshots(),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return const Center(
+                                    child: CircularProgressIndicator());
+                              }
+                              if (snapshot.hasError) {
+                                return Center(child: Text(
+                                    'Error: ${snapshot.error}'));
+                              }
+                              if (!snapshot.hasData ||
+                                  snapshot.data!.docs.isEmpty) {
+                                return const Center(child: Text(
+                                    'No therapists found'));
+                              }
+                              final users = snapshot.data!.docs;
+                              final filteredUsers = users.where((doc) {
+                                final data = doc.data() as Map<String, dynamic>;
+                                final name = data['name']
+                                    ?.toString()
+                                    .toLowerCase() ??
+                                    '';
+                                final email = data['email']
+                                    ?.toString()
+                                    .toLowerCase() ?? '';
+                                final phone = data['phone']
+                                    ?.toString()
+                                    .toLowerCase() ?? '';
+                                final specialization = (data['specialization'] ??
+                                    '')
+                                    .toString();
+                                final qualification = (data['qualification'] ??
+                                    '')
+                                    .toString();
+                                final q = _searchQuery.toLowerCase();
+                                final matchesSearch = _searchQuery.isEmpty ||
+                                    name.contains(q) || email.contains(q) ||
+                                    phone.contains(q);
+                                final matchesSpec = _specialization == 'All' ||
+                                    specialization == _specialization;
+                                final matchesQual = _qualification == 'All' ||
+                                    qualification == _qualification;
+                                return matchesSearch && matchesSpec &&
+                                    matchesQual;
+                              }).toList();
+                              if (filteredUsers.isEmpty) {
+                                return const Center(child: Text(
+                                    'No therapists match these filters.'));
+                              }
+                              return ListView.builder(
+                                itemCount: filteredUsers.length,
+                                itemBuilder: (context, index) {
+                                  final doc = filteredUsers[index];
+                                  final data = doc.data() as Map<String,
+                                      dynamic>;
+                                  return _buildTherapistCardFromUser(
+                                      context, data, doc.id);
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
-                    onChanged: (text) =>
-                        setState(() => _searchQuery = text.trim()),
                   ),
-                  const SizedBox(height: 10),
-                  // --- Advanced Filters: Specialization + Qualification ---
-                  FutureBuilder(
-                    future: FirebaseFirestore.instance
-                        .collection('users')
-                        .where('role', isEqualTo: 'therapist')
-                        .get(),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      if (!snapshot.hasData) {
-                        return const SizedBox.shrink();
-                      }
-                      final users = (snapshot.data as QuerySnapshot).docs;
-                      final specializations = [
-                        'All',
-                        ...{
-                          for (var doc in users)
-                            ((doc.data() as Map<String,
-                                dynamic>)['specialization'] ?? '')
-                                .toString()
-                                .trim()
-                        }.where((v) => v.isNotEmpty)
-                      ];
-                      final qualifications = [
-                        'All',
-                        ...{
-                          for (var doc in users)
-                            ((doc.data() as Map<String,
-                                dynamic>)['qualification'] ?? '')
-                                .toString()
-                                .trim()
-                        }.where((v) => v.isNotEmpty)
-                      ];
-                      return Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: _specialization,
-                              items: specializations
-                                  .map((s) =>
-                                  DropdownMenuItem(
-                                      value: s, child: Text(s)))
-                                  .toList(),
-                              onChanged: (val) =>
-                                  setState(() => _specialization = val!),
-                              decoration: InputDecoration(
-                                labelText: 'Specialization',
-                                border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10)),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: _qualification,
-                              items: qualifications
-                                  .map((q) =>
-                                  DropdownMenuItem(
-                                      value: q, child: Text(q)))
-                                  .toList(),
-                              onChanged: (val) =>
-                                  setState(() => _qualification = val!),
-                              decoration: InputDecoration(
-                                labelText: 'Qualification',
-                                border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10)),
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.clear_all),
-                            tooltip: 'Clear filters',
-                            onPressed: () =>
-                                setState(() {
-                                  _specialization = 'All';
-                                  _qualification = 'All';
-                                  _searchQuery = '';
-                                }),
-                          )
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 15),
-                  // --- Therapist List (Filtered) ---
-                  Expanded(
+                  // ----- 2nd Tab: Visit Logs List -----
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
                     child: StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
-                          .collection('users')
-                          .where('role', isEqualTo: 'therapist')
+                          .collection('visit_logs')
+                          .orderBy('timestamp', descending: true)
                           .snapshots(),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState ==
@@ -303,81 +387,22 @@ class _VisitsScreenState extends State<VisitsScreen> {
                               child: CircularProgressIndicator());
                         }
                         if (snapshot.hasError) {
-                          return Center(child: Text(
-                              'Error: ${snapshot.error}'));
+                          return Center(
+                              child: Text('Error: ${snapshot.error}'));
                         }
                         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                          return const Center(child: Text(
-                              'No therapists found'));
+                          return const Center(
+                              child: Text('No visit logs found'));
                         }
-                        final users = snapshot.data!.docs;
-                        final filteredUsers = users.where((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          final name = data['name']?.toString().toLowerCase() ??
-                              '';
-                          final email = data['email']
-                              ?.toString()
-                              .toLowerCase() ?? '';
-                          final phone = data['phone']
-                              ?.toString()
-                              .toLowerCase() ?? '';
-                          final specialization = (data['specialization'] ?? '')
-                              .toString();
-                          final qualification = (data['qualification'] ?? '')
-                              .toString();
-                          final q = _searchQuery.toLowerCase();
-                          final matchesSearch = _searchQuery.isEmpty ||
-                              name.contains(q) || email.contains(q) ||
-                              phone.contains(q);
-                          final matchesSpec = _specialization == 'All' ||
-                              specialization == _specialization;
-                          final matchesQual = _qualification == 'All' ||
-                              qualification == _qualification;
-                          return matchesSearch && matchesSpec && matchesQual;
-                        }).toList();
-                        if (filteredUsers.isEmpty) {
-                          return const Center(child: Text(
-                              'No therapists match these filters.'));
-                        }
-                        return ListView.builder(
-                          itemCount: filteredUsers.length,
-                          itemBuilder: (context, index) {
-                            final doc = filteredUsers[index];
-                            final data = doc.data() as Map<String, dynamic>;
-                            return _buildTherapistCardFromUser(
-                                context, data, doc.id);
-                          },
+                        return ListView(
+                          children: snapshot.data!.docs
+                              .map((doc) => _buildVisitLogCard(context, doc))
+                              .toList(),
                         );
                       },
                     ),
                   ),
                 ],
-              ),
-            ),
-            // ----- 2nd Tab: Visit Logs List -----
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('visit_logs')
-                    .orderBy('timestamp', descending: true)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) {
-                    return Center(child: Text('Error: ${snapshot.error}'));
-                  }
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return const Center(child: Text('No visit logs found'));
-                  }
-                  return ListView(
-                    children: snapshot.data!.docs
-                        .map((doc) => _buildVisitLogCard(context, doc))
-                        .toList(),
-                  );
-                },
               ),
             ),
           ],

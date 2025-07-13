@@ -82,6 +82,50 @@ class _AdminLoginState extends State<AdminLogin> {
     );
   }
 
+  void _showForgotPasswordDialog() {
+    final emailController = TextEditingController();
+    emailController.text = _emailController.text;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Forgot Password'),
+          content: TextField(
+            controller: emailController,
+            decoration: const InputDecoration(
+              labelText: 'Email',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                final authService = Provider.of<AdminAuthService>(
+                    context, listen: false);
+                final success = await authService.sendPasswordResetEmail(
+                    emailController.text);
+
+                if (success) {
+                  _showErrorSnackBar('Password reset email sent successfully');
+                } else {
+                  _showErrorSnackBar('Failed to send password reset email');
+                }
+
+                Navigator.of(context).pop();
+              },
+              child: const Text('Send'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -250,7 +294,7 @@ class _AdminLoginState extends State<AdminLogin> {
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
                                       borderSide: BorderSide(
-                                          color: Colors.red[600]!),
+                                          color: Colors.white),
                                     ),
                                     filled: true,
                                     fillColor: Colors.white.withOpacity(
@@ -294,7 +338,7 @@ class _AdminLoginState extends State<AdminLogin> {
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
                                       borderSide: BorderSide(
-                                          color: Colors.red[600]!),
+                                          color:Colors.white),
                                     ),
                                     filled: true,
                                     fillColor: Colors.white.withOpacity(
@@ -306,6 +350,17 @@ class _AdminLoginState extends State<AdminLogin> {
                                     }
                                     return null;
                                   },
+                                ),
+                                // Forgot Password Button
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton(
+                                    onPressed: _showForgotPasswordDialog,
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: Colors.black,
+                                    ),
+                                    child: const Text('Forgot password?'),
+                                  ),
                                 ),
                                 const SizedBox(height: 24),
                                 // Login Button
