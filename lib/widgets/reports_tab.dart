@@ -165,7 +165,8 @@ class _ReportsTabState extends State<ReportsTab> {
                             'Visits by Therapist',
                             'Pending Follow-ups',
                             'Revenue Report',
-                            'Patient Report', // <-- Added
+                            'Patient Report',
+                            'Visit Log Report',
                           ].map((type) =>
                               DropdownMenuItem(
                                 value: type,
@@ -219,9 +220,10 @@ class _ReportsTabState extends State<ReportsTab> {
                             children: [
                               _buildReferralsByDoctorReport(firebaseService),
                               _buildVisitsByTherapistReport(firebaseService),
+                              _buildPatientReport(firebaseService),
                               _buildPendingFollowupsReport(firebaseService),
                               _buildRevenueReport(firebaseService),
-                              _buildPatientReport(firebaseService),
+                              _buildVisitLogReport(firebaseService),
                             ],
                           );
                         } else
@@ -237,6 +239,8 @@ class _ReportsTabState extends State<ReportsTab> {
                           return _buildRevenueReport(firebaseService);
                         } else if (_selectedReportType == 'Patient Report') {
                           return _buildPatientReport(firebaseService);
+                        } else if (_selectedReportType == 'Visit Log Report') {
+                          return _buildVisitLogReport(firebaseService);
                         } else {
                           // Fallback empty space for future types
                           return const SizedBox.shrink();
@@ -535,9 +539,47 @@ class _ReportsTabState extends State<ReportsTab> {
   }
 
   Widget _buildRevenueReport(AdminFirebaseService firebaseService) {
-    final revenueData = firebaseService.reportData['revenueData'] as Map<
-        String,
-        dynamic>? ?? {};
+    // Assume allVisits contains the full list of visit logs from Firestore
+    final List<Map<String, dynamic>> allVisits = firebaseService
+        .reportData['allVisits'] as List<Map<String, dynamic>>? ?? [];
+
+    final now = DateTime.now();
+    // Helper for date (with only yyyy-mm-dd, for today matching)
+    String dateKey(DateTime dt) =>
+        '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day
+            .toString()
+            .padLeft(2, '0')}';
+
+    // Find today's Visits
+    final String todayKey = dateKey(now);
+    final todayVisits = allVisits.where((v) {
+      final dtStr = v['visitDate']?.toString()?.substring(0, 10) ?? '';
+      return dtStr == todayKey;
+    }).toList();
+    final double todayRevenue = todayVisits.fold(0.0, (sum, v) =>
+    sum + (double.tryParse(v['amount']?.toString() ?? '0') ?? 0));
+
+    // This week: from the beginning of this week (Monday)
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    final weekVisits = allVisits.where((v) {
+      final dt = DateTime.tryParse(v['visitDate']?.toString() ?? '');
+      return dt != null &&
+          dt.isAfter(monday.subtract(const Duration(seconds: 1))) &&
+          dt.isBefore(now.add(const Duration(days: 1)));
+    }).toList();
+    final double weekRevenue = weekVisits.fold(0.0, (sum, v) =>
+    sum + (double.tryParse(v['amount']?.toString() ?? '0') ?? 0));
+
+    // This month
+    final thisMonthStart = DateTime(now.year, now.month, 1);
+    final monthVisits = allVisits.where((v) {
+      final dt = DateTime.tryParse(v['visitDate']?.toString() ?? '');
+      return dt != null &&
+          dt.isAfter(thisMonthStart.subtract(const Duration(seconds: 1))) &&
+          dt.isBefore(now.add(const Duration(days: 1)));
+    }).toList();
+    final double monthRevenue = monthVisits.fold(0.0, (sum, v) =>
+    sum + (double.tryParse(v['amount']?.toString() ?? '0') ?? 0));
 
     return Card(
       margin: const EdgeInsets.only(bottom: 20),
@@ -563,6 +605,51 @@ class _ReportsTabState extends State<ReportsTab> {
             const SizedBox(height: 12),
             Row(
               children: [
+                // --- Today Revenue ---
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.teal[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: BoxBorder.lerp(
+                        Border.all(color: Colors.teal[200]!),
+                        Border.all(color: Colors.teal[200]!),
+                        1.0,
+                      )!,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Today',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.teal[800],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '₹${todayRevenue.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.teal[700],
+                          ),
+                        ),
+                        Text(
+                          '${todayVisits.length} visits completed',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.teal[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // --- This Week Revenue ---
                 Expanded(
                   child: Container(
                     padding: const EdgeInsets.all(16),
@@ -587,7 +674,7 @@ class _ReportsTabState extends State<ReportsTab> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '₹${revenueData['thisWeek'] ?? 0}',
+                          '₹${weekRevenue.toStringAsFixed(2)}',
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -595,8 +682,7 @@ class _ReportsTabState extends State<ReportsTab> {
                           ),
                         ),
                         Text(
-                          '${revenueData['thisWeekVisits'] ??
-                              0} visits completed',
+                          '${weekVisits.length} visits completed',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.purple[600],
@@ -607,6 +693,7 @@ class _ReportsTabState extends State<ReportsTab> {
                   ),
                 ),
                 const SizedBox(width: 12),
+                // --- This Month Revenue ---
                 Expanded(
                   child: Container(
                     padding: const EdgeInsets.all(16),
@@ -631,7 +718,7 @@ class _ReportsTabState extends State<ReportsTab> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '₹${revenueData['thisMonth'] ?? 0}',
+                          '₹${monthRevenue.toStringAsFixed(2)}',
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -639,8 +726,7 @@ class _ReportsTabState extends State<ReportsTab> {
                           ),
                         ),
                         Text(
-                          '${revenueData['thisMonthVisits'] ??
-                              0} visits completed',
+                          '${monthVisits.length} visits completed',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.blue[600],
@@ -751,6 +837,101 @@ class _ReportsTabState extends State<ReportsTab> {
     );
   }
 
+  Widget _buildVisitLogReport(AdminFirebaseService firebaseService) {
+    final visits = firebaseService.reportData['visitLog'] as List<
+        Map<String, dynamic>>? ?? [];
+    double totalAmount = visits.fold(0.0, (sum, v) =>
+    sum +
+        (double.tryParse(v['amount']?.toString() ?? '0') ?? 0));
+    return Card(
+      margin: const EdgeInsets.only(bottom: 20),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.assignment, color: Colors.deepPurple[700]),
+                const SizedBox(width: 8),
+                Text('Visit Log Report',
+                  style: TextStyle(fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800]),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (visits.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(20),
+                child: Center(child: Text('No visit log data available',
+                    style: TextStyle(color: Colors.grey[600]))),
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      columns: const [
+                        DataColumn(label: Text('Patient Name')),
+                        DataColumn(label: Text('Patient ID')),
+                        DataColumn(label: Text('Therapist')),
+                        DataColumn(label: Text('Visit Date')),
+                        DataColumn(label: Text('Visit Time')),
+                        DataColumn(label: Text('Visit Type')),
+                        DataColumn(label: Text('Status')),
+                        DataColumn(label: Text('VAS')),
+                        DataColumn(label: Text('Amount')),
+                        DataColumn(label: Text('Follow Up')),
+                        DataColumn(label: Text('Treatment Notes')),
+                        DataColumn(label: Text('Progress Notes')),
+                        DataColumn(label: Text('Notes')),
+                        DataColumn(label: Text('Created At')),
+                      ],
+                      rows: visits.map((visit) {
+                        return DataRow(cells: [
+                          DataCell(Text(visit['patientName'] ?? '')),
+                          DataCell(Text(visit['patientId'] ?? '')),
+                          DataCell(Text(visit['therapist'] ?? '-')),
+                          // therapist info if available
+                          DataCell(Text(visit['visitDate'] ?? '')),
+                          DataCell(Text(visit['visitTime'] ?? '')),
+                          DataCell(Text(visit['visitType'] ?? '')),
+                          DataCell(Text(visit['status'] ?? '')),
+                          DataCell(Text(visit['vasScore']?.toString() ?? '')),
+                          DataCell(Text(visit['amount']?.toString() ?? '')),
+                          DataCell(Text((visit['followUpRequired'] ?? false)
+                              ? 'Yes'
+                              : 'No')),
+                          DataCell(Text(visit['treatmentNotes'] ?? '')),
+                          DataCell(Text(visit['progressNotes'] ?? '')),
+                          DataCell(Text(visit['notes'] ?? '')),
+                          DataCell(Text(visit['createdAt'] ?? '')),
+                        ]);
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'Total Amount: ₹${totalAmount.toStringAsFixed(2)}',
+                      style: TextStyle(fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: Colors.deepPurple[800]),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   List<List<String>> buildExportRows(AdminFirebaseService firebaseService,
       String reportType, {List<Map<String, dynamic>>? patientReportOverride}) {
     final List<List<String>> rows = [];
@@ -819,6 +1000,52 @@ class _ReportsTabState extends State<ReportsTab> {
           row['doctor'] ?? '',
           row['lastVisit'] ?? '',
         ]);
+      }
+    } else if (reportType == 'Visit Log Report') {
+      rows.add([
+        'Patient Name',
+        'Patient ID',
+        'Therapist',
+        'Visit Date',
+        'Visit Time',
+        'Visit Type',
+        'Status',
+        'VAS',
+        'Amount',
+        'Follow Up',
+        'Treatment Notes',
+        'Progress Notes',
+        'Notes',
+        'Created At'
+      ]);
+      final data = firebaseService.reportData['visitLog'] as List<
+          Map<String, dynamic>>? ?? [];
+      double sum = 0;
+      for (final v in data) {
+        final amt = double.tryParse(v['amount']?.toString() ?? '0') ?? 0;
+        sum += amt;
+        rows.add([
+          v['patientName'] ?? '',
+          v['patientId'] ?? '',
+          v['therapist'] ?? '-',
+          v['visitDate'] ?? '',
+          v['visitTime'] ?? '',
+          v['visitType'] ?? '',
+          v['status'] ?? '',
+          v['vasScore']?.toString() ?? '',
+          v['amount']?.toString() ?? '',
+          (v['followUpRequired'] ?? false) ? 'Yes' : 'No',
+          v['treatmentNotes'] ?? '',
+          v['progressNotes'] ?? '',
+          v['notes'] ?? '',
+          v['createdAt'] ?? '',
+        ]);
+      }
+      // Total row
+      if (data.isNotEmpty) {
+        rows.add(List.filled(7, '')); // for spacing
+        rows.add(['', '', '', '', '', '', '', 'TOTAL', sum.toStringAsFixed(2)] +
+            List.filled(5, ''));
       }
     } else { // All Reports: concatenate all
       final dataR = firebaseService.reportData['referralsByDoctor'] as List<
@@ -897,6 +1124,10 @@ class _ReportsTabState extends State<ReportsTab> {
         }
         rows.add(List<String>.filled(4, ''));
       }
+      final vRowsLog = buildExportRows(firebaseService, 'Visit Log Report');
+      if (vRowsLog.length > 1) {
+        rows.addAll(vRowsLog);
+      }
     }
     return rows;
   }
@@ -971,18 +1202,7 @@ class _ReportsTabState extends State<ReportsTab> {
             headerColor: PdfColor.fromHex('#FFF3E0'),
           ));
         }
-        final revRows = buildExportRows(firebaseService, 'Revenue Report');
-        if (revRows.length > 1) {
-          pageWidgets.add(buildSection(
-            heading: 'Revenue Report',
-            headers: revRows[0],
-            dataRows: revRows
-                .sublist(1)
-                .where((row) => row.isNotEmpty)
-                .toList(),
-            headerColor: PdfColor.fromHex('#EDE7F6'),
-          ));
-        }
+
         final patRows = buildExportRows(firebaseService, 'Patient Report',
             patientReportOverride: _localPatientReport);
         if (patRows.length > 1) {
@@ -994,6 +1214,18 @@ class _ReportsTabState extends State<ReportsTab> {
                 .where((row) => row.isNotEmpty)
                 .toList(),
             headerColor: PdfColor.fromHex('#E0F2F1'),
+          ));
+        }
+        final vRowsLog = buildExportRows(firebaseService, 'Visit Log Report');
+        if (vRowsLog.length > 1) {
+          pageWidgets.add(buildSection(
+            heading: 'Visit Log Report',
+            headers: vRowsLog[0],
+            dataRows: vRowsLog
+                .sublist(1)
+                .where((row) => row.isNotEmpty)
+                .toList(),
+            headerColor: PdfColor.fromHex('#EDE7F6'),
           ));
         }
         pdf.addPage(
