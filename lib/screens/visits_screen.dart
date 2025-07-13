@@ -154,10 +154,58 @@ class _VisitsScreenState extends State<VisitsScreen> {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('By: 	${data['performedBy'] ?? 'Unknown'}'),
+            Text('By:  \t${data['performedBy'] ?? 'Unknown'}'),
             Text('Type: ${data['type'] ?? ''}'),
             Text('User ID: ${data['userId'] ?? ''}'),
             Text('At: ${data['timestamp'] ?? 'No date'}'),
+          ],
+        ),
+        // Add a Resend button on the trailing side
+        trailing: TextButton.icon(
+          icon: const Icon(Icons.refresh, color: Colors.green),
+          label: const Text('Resend'),
+          onPressed: () => _resendVisitLog(visitLog),
+        ),
+      ),
+    );
+  }
+
+  // Handler for the resend button; here you can add your resend logic (e.g. notification, email, etc.)
+  void _resendVisitLog(DocumentSnapshot log) {
+    // TODO: Implement your resend logic here, e.g. send a notification, email, etc.
+    // `log.data()` will give you the log contents.
+
+    // Show user feedback
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Resent visit log: ${log.id}'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  Widget _buildVisitCard(BuildContext context, DocumentSnapshot visitDoc) {
+    final data = visitDoc.data() as Map<String, dynamic>;
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Patient: ${data['patientName'] ?? 'N/A'}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            Text('Patient ID: ${data['patientId'] ?? ''}'),
+            Text('Date: ${data['visitDate'] ?? ''}   Time: ${data['visitTime'] ?? ''}'),
+            Text('Type: ${data['visitType'] ?? ''}'),
+            Text('Status: ${data['status'] ?? ''}'),
+            Text('VAS Score: ${data['vasScore'] ?? ''}'),
+            Text('Treatment Notes: ${data['treatmentNotes'] ?? ''}'),
+            Text('Progress Notes: ${data['progressNotes'] ?? ''}'),
+            Text('Notes: ${data['notes'] ?? ''}'),
+            Text('Amount: ₹${data['amount'] ?? ''}'),
+            Text('Follow Up Required: ${(data['followUpRequired'] ?? false) ? 'Yes' : 'No'}'),
+            Text('Created At: ${data['createdAt'] ?? ''}'),
           ],
         ),
       ),
@@ -377,26 +425,22 @@ class _VisitsScreenState extends State<VisitsScreen> {
                     padding: const EdgeInsets.all(16.0),
                     child: StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
-                          .collection('visit_logs')
-                          .orderBy('timestamp', descending: true)
+                          .collection('visits')
+                          .orderBy('visitDate', descending: true)
                           .snapshots(),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const Center(
-                              child: CircularProgressIndicator());
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
                         }
                         if (snapshot.hasError) {
-                          return Center(
-                              child: Text('Error: ${snapshot.error}'));
+                          return Center(child: Text('Error: ${snapshot.error}'));
                         }
                         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                          return const Center(
-                              child: Text('No visit logs found'));
+                          return const Center(child: Text('No visits found'));
                         }
                         return ListView(
                           children: snapshot.data!.docs
-                              .map((doc) => _buildVisitLogCard(context, doc))
+                              .map((doc) => _buildVisitCard(context, doc))
                               .toList(),
                         );
                       },

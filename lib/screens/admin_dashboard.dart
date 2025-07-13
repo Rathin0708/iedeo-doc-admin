@@ -718,5 +718,31 @@ Stream<List<Map<String, dynamic>>> getPatientsForTherapist(String therapistId) {
       .where('therapistId', isEqualTo: therapistId)
       .snapshots()
       .map((query) =>
-          query.docs.map((doc) => doc.data() as Map<String, dynamic>).toList());
+          query.docs.map((doc) => doc.data()).toList());
+}
+
+///
+/// Helper function to be called after every new visit creation,
+/// so that visit_logs always includes every visit regardless of who created it.
+///
+Future<void> logVisitToLogsCollection({
+  required String therapistId,
+  required String patientId,
+  required String patientName,
+  required String visitType,
+  required num amount,
+  required String progressNotes,
+  required String status,
+}) async {
+  await FirebaseFirestore.instance.collection('visit_logs').add({
+    'performedBy': therapistId,
+    'userId': patientId,
+    'patientName': patientName,
+    'visitType': visitType,
+    'amount': amount,
+    'description': '$visitType for $patientName',
+    'progressNotes': progressNotes,
+    'status': status,
+    'timestamp': DateTime.now(),
+  });
 }
