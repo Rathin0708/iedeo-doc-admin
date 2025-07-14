@@ -477,20 +477,20 @@ class AdminFirebaseService extends ChangeNotifier {
       int thisWeekVisits = 0;
       int thisMonthVisits = 0;
 
-      const int costPerVisit = 1800; // ₹1800 per visit
-
+      // Loop through each visit and add up ACTUAL amount from Firestore
       for (var doc in visitsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final visitDate = _toDate(data['visitDate']);
+        final amt = int.tryParse(data['amount']?.toString() ?? '0') ?? 0;
 
         if (visitDate != null) {
           if (visitDate.isAfter(thisWeekStart)) {
-            thisWeekRevenue += costPerVisit;
+            thisWeekRevenue += amt;
             thisWeekVisits++;
           }
 
           if (visitDate.isAfter(thisMonthStart)) {
-            thisMonthRevenue += costPerVisit;
+            thisMonthRevenue += amt;
             thisMonthVisits++;
           }
         }
@@ -501,7 +501,6 @@ class AdminFirebaseService extends ChangeNotifier {
         'thisMonth': thisMonthRevenue,
         'thisWeekVisits': thisWeekVisits,
         'thisMonthVisits': thisMonthVisits,
-        'costPerVisit': costPerVisit,
       };
     } catch (e) {
       print('❌ Error calculating revenue: $e');
@@ -510,7 +509,6 @@ class AdminFirebaseService extends ChangeNotifier {
         'thisMonth': 0,
         'thisWeekVisits': 0,
         'thisMonthVisits': 0,
-        'costPerVisit': 1800,
       };
     }
   }
