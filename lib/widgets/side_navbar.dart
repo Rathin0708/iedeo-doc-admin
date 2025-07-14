@@ -74,13 +74,13 @@ class _NavItem extends StatelessWidget {
         child: Row(
           children: [
             Icon(icon,
-                size: 22, color: selected ?  Colors.lightGreen[600]!:
-              Colors.green[500]!),
+                size: 22, color: selected ?  Color(0xFF4CAF7E):
+                Color(0xFF4CAF7E)),
             const SizedBox(width: 14),
             Text(
               label,
               style: TextStyle(
-                color: selected ? Colors.lightGreen[800] : Colors.grey[800],
+                color: selected ?  Color(0xFF4CAF7E) : Colors.grey[800],
                 fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                 fontSize: 16,
               ),

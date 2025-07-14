@@ -130,9 +130,9 @@ class _AdminDashboardState extends State<AdminDashboard>
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        Colors.lightGreen[600]!,
-                        Colors.green[500]!,
-                        Colors.grey[400]!,
+                        Color(0xFF4CAF7E),
+                        Color(0xFF4CAF7E),
+                        Color(0xFF4CAF7E),
                       ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -313,8 +313,8 @@ class _AdminDashboardState extends State<AdminDashboard>
                           unselectedLabelColor: Colors.grey[600],
                           indicator: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: [ Colors.lightGreen[600]!,
-                                Colors.green[500]!],
+                              colors: [  Color(0xFF4CAF7E),
+                                 Color(0xFF4CAF7E)],
                             ),
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -409,9 +409,9 @@ class _AdminDashboardState extends State<AdminDashboard>
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                Colors.lightGreen[600]!,
-                Colors.green[500]!,
-                Colors.grey[400]!,
+                Color(0xFF4CAF7E),
+                Color(0xFF4CAF7E),
+                Color(0xFF4CAF7E)
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -629,15 +629,6 @@ class _AdminDashboardState extends State<AdminDashboard>
                           '${stats['unassignedPatients'] ?? 0}',
                           Icons.assignment_late,
                           [Colors.red[400]!, Colors.red[600]!],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatCard(
-                          'System Health',
-                          'Active',
-                          Icons.health_and_safety,
-                          [Colors.teal[400]!, Colors.teal[600]!],
                         ),
                       ),
                     ],

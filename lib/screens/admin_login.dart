@@ -185,7 +185,7 @@ class _AdminLoginState extends State<AdminLogin> {
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 colors: [
-                                  Colors.greenAccent,
+                                  Color(0xFF4CAF7E),
                                   Colors.green[300]!
                                 ],
                               ),

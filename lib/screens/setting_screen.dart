@@ -40,9 +40,8 @@ class _SettingScreenState extends State<SettingScreen> {
                     children: [
                       CircleAvatar(
                         radius: 32,
-                        backgroundColor: Colors.red[200],
-                        child: Icon(Icons.account_circle, color: Colors
-                            .red[700], size: 50),
+                        backgroundColor: Color(0x5A4CAF7E),
+                        child: Icon(Icons.account_circle, color: Color(0xFF4CAF7E), size: 50),
                       ),
                       const SizedBox(width: 22),
                       Column(
@@ -64,12 +63,12 @@ class _SettingScreenState extends State<SettingScreen> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 5),
                             decoration: BoxDecoration(
-                              color: Colors.red[50],
+                              color: Color(0xFF4CAF7E),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Text('Super Administrator',
                                 style: TextStyle(fontSize: 12,
-                                    color: Colors.red,
+                                    color:  Colors.white,
                                     fontWeight: FontWeight.bold)),
                           ),
                         ],
@@ -82,7 +81,7 @@ class _SettingScreenState extends State<SettingScreen> {
           ),
           Row(
             children: [
-              Icon(Icons.settings, size: 32, color: Colors.red[600]),
+              Icon(Icons.settings, size: 32, color:  Color(0xFF4CAF7E)),
               const SizedBox(width: 8),
               const Text(
                 'Account',
@@ -264,7 +263,7 @@ class _SettingScreenState extends State<SettingScreen> {
                   ValueListenableBuilder<String?>(
                     valueListenable: errorNotifier,
                     builder: (context, val, _) =>
-                    val != null ? Text(val, style: TextStyle(color: Colors.red,
+                    val != null ? Text(val, style: TextStyle(color:  Color(0xFF4CAF7E),
                         fontSize: 13)) : SizedBox.shrink(),
                   )
                 ],
@@ -331,7 +330,9 @@ class _SettingScreenState extends State<SettingScreen> {
                           height: 18,
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white))
-                          : const Text('Save'),
+                          : const Text('Save'
+
+                      ),
                     );
                   },
                 ),

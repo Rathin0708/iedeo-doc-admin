@@ -9,7 +9,7 @@ import '../services/visit_service.dart';
 class AddVisitLogScreen extends StatefulWidget {
   final AdminPatient patient;
   
-  const AddVisitLogScreen({Key? key, required this.patient}) : super(key: key);
+  const AddVisitLogScreen({super.key, required this.patient});
 
   @override
   State<AddVisitLogScreen> createState() => _AddVisitLogScreenState();

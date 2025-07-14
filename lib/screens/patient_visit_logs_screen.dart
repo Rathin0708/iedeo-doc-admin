@@ -67,6 +67,7 @@ class _PatientVisitLogsScreenState extends State<PatientVisitLogsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor:  Color(0xFF4CAF7E),
         title: Text('Visit Logs for ${widget.name}'),
         actions: [
           IconButton(

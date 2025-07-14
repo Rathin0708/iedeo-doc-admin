@@ -69,6 +69,7 @@ class _TherapistAssignedPatientsScreenState
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor:  Color(0xFF4CAF7E),
           title: Text('Assigned Patients for ${widget.therapistName}')),
       body: Column(
         children: [

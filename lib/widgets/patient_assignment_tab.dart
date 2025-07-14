@@ -21,10 +21,9 @@ class _PrescriptionImageViewer extends StatefulWidget {
   final int initialIndex;
 
   const _PrescriptionImageViewer({
-    Key? key,
     required this.imageUrls,
     required this.initialIndex,
-  }) : super(key: key);
+  });
 
   @override
   State<_PrescriptionImageViewer> createState() =>
@@ -403,7 +402,7 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
                 margin: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Colors.blue[600]!, Colors.blue[400]!],
+                    colors: [ Color(0xFF4CAF7E), Color(0xFF4CAF7E)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -461,7 +460,7 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
                   unselectedLabelColor: Colors.grey[600],
                   indicator: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Colors.blue[500]!, Colors.blue[700]!],
+                      colors: [ Color(0xFF4CAF7E),  Color(0xFF4CAF7E)],
                     ),
                     borderRadius: BorderRadius.circular(12),
                   ),

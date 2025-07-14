@@ -208,11 +208,8 @@ class _ReportsTabState extends State<ReportsTab> {
                           items: [
                             'All Reports',
                             'Referrals by Doctor',
-                            'Visits by Therapist',
-                            'Pending Follow-ups',
                             'Revenue Report',
                             'Patient Report',
-                            'Visit Log Report',
                           ].map((type) =>
                               DropdownMenuItem(
                                 value: type,
@@ -276,7 +273,7 @@ class _ReportsTabState extends State<ReportsTab> {
                           return Column(
                             children: [
                               _buildReferralsByDoctorReport(firebaseService),
-                              _buildVisitsByTherapistReport(firebaseService),
+
                               _buildPatientReport(firebaseService),
                               _buildRevenueReport(firebaseService),
                             ],
@@ -284,10 +281,8 @@ class _ReportsTabState extends State<ReportsTab> {
                         } else
                         if (_selectedReportType == 'Referrals by Doctor') {
                           return _buildReferralsByDoctorReport(firebaseService);
-                        } else
-                        if (_selectedReportType == 'Visits by Therapist') {
-                          return _buildVisitsByTherapistReport(firebaseService);
-                        } else if (_selectedReportType == 'Revenue Report') {
+                        }
+                         else if (_selectedReportType == 'Revenue Report') {
                           return _buildRevenueReport(firebaseService);
                         } else if (_selectedReportType == 'Patient Report') {
                           return _buildPatientReport(firebaseService);
@@ -466,78 +461,6 @@ class _ReportsTabState extends State<ReportsTab> {
     );
   }
 
-  Widget _buildVisitsByTherapistReport(AdminFirebaseService firebaseService) {
-    final allVisitsByTherapist = firebaseService
-        .reportData['visitsByTherapist'] as List<
-        Map<String, dynamic>>? ?? [];
-
-    // Period filter logic for visits by therapist (try to use createdAt field if provided, else fallback)
-    final List<Map<String, dynamic>> visitsFiltered = allVisitsByTherapist
-        .where((row) {
-      final createdAt = _parseVisitDate(row['createdAt']);
-      if (createdAt == null) return true; // Fallback: if missing, include
-      final range = _getPeriodRange(_selectedPeriod);
-      return !createdAt.isBefore(range[0]) && createdAt.isBefore(range[1]);
-    }).toList();
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 20),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.healing, color: Colors.green[700]),
-                const SizedBox(width: 8),
-                Text(
-                  'Visits by Therapist (${_selectedPeriod})',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[800],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (visitsFiltered.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(20),
-                child: Center(
-                  child: Text(
-                    'No visit data available',
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                ),
-              )
-            else
-              SizedBox(
-                width: double.infinity,
-                child: DataTable(
-                  columns: const [
-                    DataColumn(label: Text('Therapist Name')),
-                    DataColumn(label: Text('Total Visits')),
-                    DataColumn(label: Text('This Week')),
-                    DataColumn(label: Text('Completion Rate')),
-                  ],
-                  rows: visitsFiltered.map((therapist) {
-                    return DataRow(cells: [
-                      DataCell(Text(therapist['therapistName'] ?? 'Unknown')),
-                      DataCell(Text('${therapist['totalVisits'] ?? 0}')),
-                      DataCell(Text('${therapist['thisWeekVisits'] ?? 0}')),
-                      DataCell(Text('${therapist['completionRate'] ?? 0}%')),
-                    ]);
-                  }).toList(),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildRevenueReport(AdminFirebaseService firebaseService) {
     final List<Map<String, dynamic>> allVisits = firebaseService
         .reportData['allVisits'] as List<Map<String, dynamic>>? ?? [];
@@ -648,7 +571,7 @@ class _ReportsTabState extends State<ReportsTab> {
                 Icon(Icons.person, color: Colors.teal[700]),
                 const SizedBox(width: 8),
                 Text(
-                  'Patient Report ($_selectedPeriod)',
+                  'Patient Report (${_selectedPeriod})',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -747,22 +670,40 @@ class _ReportsTabState extends State<ReportsTab> {
       }
     } else if (reportType == 'Visits by Therapist') {
       rows.add(
-          ['Therapist Name', 'Total Visits', 'This Week', 'Completion Rate']);
-      final data = firebaseService.reportData['visitsByTherapist'] as List<
+          ['Therapist Name', 'Total Visits', 'Completion Rate']);
+      final allVisits = firebaseService.reportData['allVisits'] as List<
           Map<String, dynamic>>? ?? [];
+      final allTherapistStats = firebaseService
+          .reportData['visitsByTherapist'] as List<Map<String, dynamic>>? ?? [];
       final period = _selectedPeriod;
       final range = _getPeriodRange(period);
-      for (final row in data) {
-        final createdAt = _parseVisitDate(row['createdAt']);
-        if (createdAt != null &&
-            (createdAt.isBefore(range[0]) || !createdAt.isBefore(range[1]))) {
-          continue;
+      Map<String, Map<String, dynamic>> periodTherapists = {};
+      for (final visit in allVisits) {
+        final therapistId = visit['therapistId'];
+        final visitDate = _parseVisitDate(visit['visitDate']);
+        if (therapistId == null || visitDate == null) continue;
+        if (!visitDate.isBefore(range[0]) && visitDate.isBefore(range[1])) {
+          periodTherapists.putIfAbsent(therapistId, () {
+            final mainRow = allTherapistStats.firstWhere(
+                    (row) => row['therapistId'] == therapistId,
+                orElse: () => {});
+            return {
+              'therapistName': mainRow['therapistName'] ?? 'Unknown',
+              'therapistId': therapistId,
+              'totalVisits': 0,
+              'completionRate': mainRow['completionRate'] ?? 0,
+              'thisWeekVisits': mainRow['thisWeekVisits'] ?? 0,
+            };
+          });
+          periodTherapists[therapistId]!['totalVisits']++;
         }
+      }
+      final visitsFiltered = periodTherapists.values.toList();
+      for (final row in visitsFiltered) {
         rows.add([
           row['therapistName'] ?? '',
           '${row['totalVisits'] ?? 0}',
-          '${row['thisWeekVisits'] ?? 0}',
-          '${row['completionRate'] ?? 0}%',
+          '${row['completionRate'] ?? 0}%'
         ]);
       }
     } else if (reportType == 'Pending Follow-ups') {
@@ -873,6 +814,9 @@ class _ReportsTabState extends State<ReportsTab> {
       final revenue = firebaseService.reportData['revenueData'] as Map<
           String,
           dynamic>? ?? {};
+      final allVisits = firebaseService.reportData['allVisits'] as List<
+          Map<String, dynamic>>? ?? [];
+      final allTherapistStats = dataV;
       if (dataR.isNotEmpty) {
         rows.add(['Doctor Name', 'Total Referrals', 'Completed', 'Pending']);
         final period = _selectedPeriod;
@@ -894,23 +838,38 @@ class _ReportsTabState extends State<ReportsTab> {
       }
       if (dataV.isNotEmpty) {
         rows.add(
-            ['Therapist Name', 'Total Visits', 'This Week', 'Completion Rate']);
+            ['Therapist Name', 'Total Visits', 'Completion Rate']);
         final period = _selectedPeriod;
         final range = _getPeriodRange(period);
-        for (final row in dataV) {
-          final createdAt = _parseVisitDate(row['createdAt']);
-          if (createdAt != null &&
-              (createdAt.isBefore(range[0]) || !createdAt.isBefore(range[1]))) {
-            continue;
+        Map<String, Map<String, dynamic>> periodTherapists = {};
+        for (final visit in allVisits) {
+          final therapistId = visit['therapistId'];
+          final visitDate = _parseVisitDate(visit['visitDate']);
+          if (therapistId == null || visitDate == null) continue;
+          if (!visitDate.isBefore(range[0]) && visitDate.isBefore(range[1])) {
+            periodTherapists.putIfAbsent(therapistId, () {
+              final mainRow = allTherapistStats.firstWhere(
+                      (row) => row['therapistId'] == therapistId,
+                  orElse: () => {});
+              return {
+                'therapistName': mainRow['therapistName'] ?? 'Unknown',
+                'therapistId': therapistId,
+                'totalVisits': 0,
+                'completionRate': mainRow['completionRate'] ?? 0,
+              };
+            });
+            periodTherapists[therapistId]!['totalVisits']++;
           }
+        }
+        final visitsFiltered = periodTherapists.values.toList();
+        for (final row in visitsFiltered) {
           rows.add([
             row['therapistName'] ?? '',
             '${row['totalVisits'] ?? 0}',
-            '${row['thisWeekVisits'] ?? 0}',
             '${row['completionRate'] ?? 0}%',
           ]);
         }
-        rows.add(List<String>.filled(4, ''));
+        rows.add(List<String>.filled(3, ''));
       }
       if (dataF.isNotEmpty) {
         rows.add(['Patient Name', 'Therapist', 'Last Visit', 'Due Date']);
@@ -1036,18 +995,8 @@ class _ReportsTabState extends State<ReportsTab> {
             headerColor: PdfColor.fromHex('#E8F5E9'),
           ));
         }
-        final fRows = buildExportRows(firebaseService, 'Pending Follow-ups');
-        if (fRows.length > 1) {
-          pageWidgets.add(buildSection(
-            heading: 'Pending Follow-ups',
-            headers: fRows[0],
-            dataRows: fRows
-                .sublist(1)
-                .where((row) => row.isNotEmpty)
-                .toList(),
-            headerColor: PdfColor.fromHex('#FFF3E0'),
-          ));
-        }
+
+
 
         final patRows = buildExportRows(firebaseService, 'Patient Report',
             patientReportOverride: _localPatientReport);
@@ -1062,16 +1011,16 @@ class _ReportsTabState extends State<ReportsTab> {
             headerColor: PdfColor.fromHex('#E0F2F1'),
           ));
         }
-        final vRowsLog = buildExportRows(firebaseService, 'Visit Log Report');
-        if (vRowsLog.length > 1) {
+        final revRows = buildExportRows(firebaseService, 'Revenue Report');
+        if (revRows.length > 1) {
           pageWidgets.add(buildSection(
-            heading: 'Visit Log Report',
-            headers: vRowsLog[0],
-            dataRows: vRowsLog
+            heading: 'Revenue Report',
+            headers: revRows[0],
+            dataRows: revRows
                 .sublist(1)
                 .where((row) => row.isNotEmpty)
                 .toList(),
-            headerColor: PdfColor.fromHex('#EDE7F6'),
+            headerColor: PdfColor.fromHex('#F3E5F5'),
           ));
         }
         pdf.addPage(
