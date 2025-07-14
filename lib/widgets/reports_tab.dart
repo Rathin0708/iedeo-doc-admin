@@ -221,9 +221,7 @@ class _ReportsTabState extends State<ReportsTab> {
                               _buildReferralsByDoctorReport(firebaseService),
                               _buildVisitsByTherapistReport(firebaseService),
                               _buildPatientReport(firebaseService),
-                              _buildPendingFollowupsReport(firebaseService),
                               _buildRevenueReport(firebaseService),
-                              _buildVisitLogReport(firebaseService),
                             ],
                           );
                         } else
@@ -232,16 +230,11 @@ class _ReportsTabState extends State<ReportsTab> {
                         } else
                         if (_selectedReportType == 'Visits by Therapist') {
                           return _buildVisitsByTherapistReport(firebaseService);
-                        } else
-                        if (_selectedReportType == 'Pending Follow-ups') {
-                          return _buildPendingFollowupsReport(firebaseService);
                         } else if (_selectedReportType == 'Revenue Report') {
                           return _buildRevenueReport(firebaseService);
                         } else if (_selectedReportType == 'Patient Report') {
                           return _buildPatientReport(firebaseService);
-                        } else if (_selectedReportType == 'Visit Log Report') {
-                          return _buildVisitLogReport(firebaseService);
-                        } else {
+                        }  else {
                           // Fallback empty space for future types
                           return const SizedBox.shrink();
                         }
@@ -275,15 +268,6 @@ class _ReportsTabState extends State<ReportsTab> {
             '${firebaseService.dashboardStats['completedVisits'] ?? 0}',
             Icons.check_circle,
             [Colors.green[400]!, Colors.green[600]!],
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildStatCard(
-            'Pending Follow-ups',
-            '${firebaseService.dashboardStats['pendingFollowups'] ?? 0}',
-            Icons.schedule,
-            [Colors.orange[400]!, Colors.orange[600]!],
           ),
         ),
         const SizedBox(width: 12),
@@ -389,7 +373,7 @@ class _ReportsTabState extends State<ReportsTab> {
                 ),
               )
             else
-              Container(
+              SizedBox(
                 width: double.infinity,
                 child: DataTable(
                   columns: const [
@@ -451,7 +435,7 @@ class _ReportsTabState extends State<ReportsTab> {
                 ),
               )
             else
-              Container(
+              SizedBox(
                 width: double.infinity,
                 child: DataTable(
                   columns: const [
@@ -466,68 +450,6 @@ class _ReportsTabState extends State<ReportsTab> {
                       DataCell(Text('${therapist['totalVisits'] ?? 0}')),
                       DataCell(Text('${therapist['thisWeekVisits'] ?? 0}')),
                       DataCell(Text('${therapist['completionRate'] ?? 0}%')),
-                    ]);
-                  }).toList(),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPendingFollowupsReport(AdminFirebaseService firebaseService) {
-    final followupsData = firebaseService
-        .reportData['pendingFollowups'] as List<Map<String, dynamic>>? ?? [];
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 20),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.schedule, color: Colors.orange[700]),
-                const SizedBox(width: 8),
-                Text(
-                  'Pending Follow-ups',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[800],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (followupsData.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(20),
-                child: Center(
-                  child: Text(
-                    'No pending follow-ups',
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                ),
-              )
-            else
-              Container(
-                width: double.infinity,
-                child: DataTable(
-                  columns: const [
-                    DataColumn(label: Text('Patient Name')),
-                    DataColumn(label: Text('Therapist')),
-                    DataColumn(label: Text('Last Visit')),
-                    DataColumn(label: Text('Due Date')),
-                  ],
-                  rows: followupsData.map((followup) {
-                    return DataRow(cells: [
-                      DataCell(Text(followup['patientName'] ?? 'Unknown')),
-                      DataCell(Text(followup['therapistName'] ?? 'Unknown')),
-                      DataCell(Text(followup['lastVisitDate'] ?? 'Unknown')),
-                      DataCell(Text(followup['dueDate'] ?? 'Unknown')),
                     ]);
                   }).toList(),
                 ),
@@ -811,7 +733,7 @@ class _ReportsTabState extends State<ReportsTab> {
               )
             else
               if (_patientReportLoaded)
-              Container(
+              SizedBox(
                 width: double.infinity,
                 // DataTable renders the patient details
                 child: DataTable(
@@ -837,100 +759,6 @@ class _ReportsTabState extends State<ReportsTab> {
     );
   }
 
-  Widget _buildVisitLogReport(AdminFirebaseService firebaseService) {
-    final visits = firebaseService.reportData['visitLog'] as List<
-        Map<String, dynamic>>? ?? [];
-    double totalAmount = visits.fold(0.0, (sum, v) =>
-    sum +
-        (double.tryParse(v['amount']?.toString() ?? '0') ?? 0));
-    return Card(
-      margin: const EdgeInsets.only(bottom: 20),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.assignment, color: Colors.deepPurple[700]),
-                const SizedBox(width: 8),
-                Text('Visit Log Report',
-                  style: TextStyle(fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[800]),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (visits.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(20),
-                child: Center(child: Text('No visit log data available',
-                    style: TextStyle(color: Colors.grey[600]))),
-              )
-            else
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columns: const [
-                        DataColumn(label: Text('Patient Name')),
-                        DataColumn(label: Text('Patient ID')),
-                        DataColumn(label: Text('Therapist')),
-                        DataColumn(label: Text('Visit Date')),
-                        DataColumn(label: Text('Visit Time')),
-                        DataColumn(label: Text('Visit Type')),
-                        DataColumn(label: Text('Status')),
-                        DataColumn(label: Text('VAS')),
-                        DataColumn(label: Text('Amount')),
-                        DataColumn(label: Text('Follow Up')),
-                        DataColumn(label: Text('Treatment Notes')),
-                        DataColumn(label: Text('Progress Notes')),
-                        DataColumn(label: Text('Notes')),
-                        DataColumn(label: Text('Created At')),
-                      ],
-                      rows: visits.map((visit) {
-                        return DataRow(cells: [
-                          DataCell(Text(visit['patientName'] ?? '')),
-                          DataCell(Text(visit['patientId'] ?? '')),
-                          DataCell(Text(visit['therapist'] ?? '-')),
-                          // therapist info if available
-                          DataCell(Text(visit['visitDate'] ?? '')),
-                          DataCell(Text(visit['visitTime'] ?? '')),
-                          DataCell(Text(visit['visitType'] ?? '')),
-                          DataCell(Text(visit['status'] ?? '')),
-                          DataCell(Text(visit['vasScore']?.toString() ?? '')),
-                          DataCell(Text(visit['amount']?.toString() ?? '')),
-                          DataCell(Text((visit['followUpRequired'] ?? false)
-                              ? 'Yes'
-                              : 'No')),
-                          DataCell(Text(visit['treatmentNotes'] ?? '')),
-                          DataCell(Text(visit['progressNotes'] ?? '')),
-                          DataCell(Text(visit['notes'] ?? '')),
-                          DataCell(Text(visit['createdAt'] ?? '')),
-                        ]);
-                      }).toList(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      'Total Amount: ₹${totalAmount.toStringAsFixed(2)}',
-                      style: TextStyle(fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          color: Colors.deepPurple[800]),
-                    ),
-                  ),
-                ],
-              ),
-          ],
-        ),
-      ),
-    );
-  }
 
   List<List<String>> buildExportRows(AdminFirebaseService firebaseService,
       String reportType, {List<Map<String, dynamic>>? patientReportOverride}) {
