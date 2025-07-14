@@ -23,6 +23,46 @@ class _ReportsTabState extends State<ReportsTab> {
   List<Map<String, dynamic>> _localPatientReport = [];
   bool _patientReportLoaded = false;
 
+  // Helper: Parse a date value from Firestore or string
+  DateTime? _parseVisitDate(dynamic d) {
+    if (d == null) return null;
+    if (d is DateTime) return d;
+    try {
+      return d.toDate();
+    } catch (_) {}
+    try {
+      return DateTime.parse(d.toString());
+    } catch (_) {}
+    return null;
+  }
+
+  /// Returns a tuple (start, end) for the selected filter period
+  List<DateTime> _getPeriodRange(String period) {
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    if (period == 'Today') {
+      return [todayStart, todayStart.add(const Duration(days: 1))];
+    } else if (period == 'This Week') {
+      final weekStart = todayStart.subtract(
+          Duration(days: todayStart.weekday - 1));
+      return [weekStart, todayStart.add(const Duration(days: 1))];
+    } else if (period == 'This Month') {
+      final monthStart = DateTime(now.year, now.month, 1);
+      return [monthStart, todayStart.add(const Duration(days: 1))];
+    } else if (period == 'Last Month') {
+      final lastMonth = now.month == 1 ? 12 : now.month - 1;
+      final year = now.month == 1 ? now.year - 1 : now.year;
+      final lastMonthStart = DateTime(year, lastMonth, 1);
+      final lastMonthEnd = DateTime(now.year, now.month, 1);
+      return [lastMonthStart, lastMonthEnd];
+    } else {
+      // Custom Range: fallback to 'This Week'
+      final weekStart = todayStart.subtract(
+          Duration(days: todayStart.weekday - 1));
+      return [weekStart, todayStart.add(const Duration(days: 1))];
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +103,12 @@ class _ReportsTabState extends State<ReportsTab> {
         if (firebaseService.isLoading) {
           return const Center(child: CircularProgressIndicator());
         }
+
+        // Wait until all reports, especially allVisits, are actually loaded
+        final bool isRevenueReady =
+            !firebaseService.isLoading &&
+                (firebaseService.reportData['allVisits'] != null) &&
+                (firebaseService.reportData['allVisits'] as List).isNotEmpty;
 
         return Column(
           children: [
@@ -182,10 +228,21 @@ class _ReportsTabState extends State<ReportsTab> {
                       ),
                       const SizedBox(width: 12),
                       ElevatedButton.icon(
-                        onPressed: () =>
-                            _exportToPDF(context, firebaseService),
+                        onPressed: isRevenueReady
+                            ? () => _exportToPDF(context, firebaseService)
+                            : null, // disable until data loaded
                         icon: const Icon(Icons.picture_as_pdf, size: 18),
-                        label: const Text('Export PDF'),
+                        label: isRevenueReady
+                            ? const Text('Export PDF')
+                            : Row(children: [
+                          SizedBox(
+                              width: 15,
+                              height: 15,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2)),
+                          SizedBox(width: 8),
+                          Text('Loading...')
+                        ]),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.red[400],
                           foregroundColor: Colors.white,
@@ -337,8 +394,19 @@ class _ReportsTabState extends State<ReportsTab> {
   }
 
   Widget _buildReferralsByDoctorReport(AdminFirebaseService firebaseService) {
-    final referralsData = firebaseService
+    final allReferrals = firebaseService
         .reportData['referralsByDoctor'] as List<Map<String, dynamic>>? ?? [];
+
+    // Filter referrals by period using period range
+    final List<Map<String, dynamic>> referralsFiltered = allReferrals.where((
+        row) {
+      // Can't filter by individual visit date: needs visit/createdAt field
+      // Here, we try to use the 'createdAt' field in each referral by doctor row
+      final createdAt = _parseVisitDate(row['createdAt']);
+      if (createdAt == null) return true; // Fallback: if missing, include
+      final range = _getPeriodRange(_selectedPeriod);
+      return !createdAt.isBefore(range[0]) && createdAt.isBefore(range[1]);
+    }).toList();
 
     return Card(
       margin: const EdgeInsets.only(bottom: 20),
@@ -352,7 +420,7 @@ class _ReportsTabState extends State<ReportsTab> {
                 Icon(Icons.medical_services, color: Colors.blue[700]),
                 const SizedBox(width: 8),
                 Text(
-                  'Referrals by Doctor',
+                  'Referrals by Doctor (${_selectedPeriod})',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -362,7 +430,7 @@ class _ReportsTabState extends State<ReportsTab> {
               ],
             ),
             const SizedBox(height: 12),
-            if (referralsData.isEmpty)
+            if (referralsFiltered.isEmpty)
               Container(
                 padding: const EdgeInsets.all(20),
                 child: Center(
@@ -382,7 +450,7 @@ class _ReportsTabState extends State<ReportsTab> {
                     DataColumn(label: Text('Completed')),
                     DataColumn(label: Text('Pending')),
                   ],
-                  rows: referralsData.map((doctor) {
+                  rows: referralsFiltered.map((doctor) {
                     return DataRow(cells: [
                       DataCell(Text(doctor['doctorName'] ?? 'Unknown')),
                       DataCell(Text('${doctor['totalReferrals'] ?? 0}')),
@@ -399,8 +467,18 @@ class _ReportsTabState extends State<ReportsTab> {
   }
 
   Widget _buildVisitsByTherapistReport(AdminFirebaseService firebaseService) {
-    final visitsData = firebaseService.reportData['visitsByTherapist'] as List<
+    final allVisitsByTherapist = firebaseService
+        .reportData['visitsByTherapist'] as List<
         Map<String, dynamic>>? ?? [];
+
+    // Period filter logic for visits by therapist (try to use createdAt field if provided, else fallback)
+    final List<Map<String, dynamic>> visitsFiltered = allVisitsByTherapist
+        .where((row) {
+      final createdAt = _parseVisitDate(row['createdAt']);
+      if (createdAt == null) return true; // Fallback: if missing, include
+      final range = _getPeriodRange(_selectedPeriod);
+      return !createdAt.isBefore(range[0]) && createdAt.isBefore(range[1]);
+    }).toList();
 
     return Card(
       margin: const EdgeInsets.only(bottom: 20),
@@ -414,7 +492,7 @@ class _ReportsTabState extends State<ReportsTab> {
                 Icon(Icons.healing, color: Colors.green[700]),
                 const SizedBox(width: 8),
                 Text(
-                  'Visits by Therapist',
+                  'Visits by Therapist (${_selectedPeriod})',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -424,7 +502,7 @@ class _ReportsTabState extends State<ReportsTab> {
               ],
             ),
             const SizedBox(height: 12),
-            if (visitsData.isEmpty)
+            if (visitsFiltered.isEmpty)
               Container(
                 padding: const EdgeInsets.all(20),
                 child: Center(
@@ -444,7 +522,7 @@ class _ReportsTabState extends State<ReportsTab> {
                     DataColumn(label: Text('This Week')),
                     DataColumn(label: Text('Completion Rate')),
                   ],
-                  rows: visitsData.map((therapist) {
+                  rows: visitsFiltered.map((therapist) {
                     return DataRow(cells: [
                       DataCell(Text(therapist['therapistName'] ?? 'Unknown')),
                       DataCell(Text('${therapist['totalVisits'] ?? 0}')),
@@ -461,61 +539,19 @@ class _ReportsTabState extends State<ReportsTab> {
   }
 
   Widget _buildRevenueReport(AdminFirebaseService firebaseService) {
-    // Get all visits data from the backend
     final List<Map<String, dynamic>> allVisits = firebaseService
         .reportData['allVisits'] as List<Map<String, dynamic>>? ?? [];
-    final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
-    final tomorrowStart = todayStart.add(const Duration(days: 1));
-
-    // Helper for parsing/best-effort normalization
-    DateTime? parseVisitDate(dynamic d) {
-      if (d == null) return null;
-      if (d is DateTime) return d;
-      try { // Try Timestamp (from Firestore)
-        return d.toDate();
-      } catch (_) {}
-      try {
-        return DateTime.parse(d.toString());
-      } catch (_) {}
-      return null;
-    }
-
-    // --- Today ---
-    final todayVisits = allVisits.where((v) {
-      final dt = parseVisitDate(v['visitDate']);
-      return dt != null && dt.isAtSameMomentAs(todayStart) || (dt != null &&
-          dt.isAfter(todayStart.subtract(const Duration(seconds: 1))) &&
-          dt.isBefore(tomorrowStart));
+    final periodRange = _getPeriodRange(_selectedPeriod);
+    final periodStart = periodRange[0];
+    final periodEnd = periodRange[1];
+    // Use the selected filter for summary revenue calculation
+    final filteredVisits = allVisits.where((v) {
+      final dt = _parseVisitDate(v['visitDate']);
+      return dt != null && !dt.isBefore(periodStart) && dt.isBefore(periodEnd);
     }).toList();
-    final double todayRevenue = todayVisits.fold(0.0, (sum, v) =>
+    final double totalRevenue = filteredVisits.fold(0.0, (sum, v) =>
     sum +
         (double.tryParse(v['amount']?.toString() ?? '0') ?? 0));
-
-    // --- This Week ---
-    final weekStart = todayStart.subtract(
-        Duration(days: todayStart.weekday - 1));
-    final weekVisits = allVisits.where((v) {
-      final dt = parseVisitDate(v['visitDate']);
-      return dt != null && !dt.isBefore(weekStart) &&
-          dt.isBefore(tomorrowStart);
-    }).toList();
-    final double weekRevenue = weekVisits.fold(0.0, (sum, v) =>
-    sum +
-        (double.tryParse(v['amount']?.toString() ?? '0') ?? 0));
-
-    // --- This Month ---
-    final monthStart = DateTime(now.year, now.month, 1);
-    final monthVisits = allVisits.where((v) {
-      final dt = parseVisitDate(v['visitDate']);
-      return dt != null && !dt.isBefore(monthStart) &&
-          dt.isBefore(tomorrowStart);
-    }).toList();
-    final double monthRevenue = monthVisits.fold(0.0, (sum, v) =>
-    sum +
-        (double.tryParse(v['amount']?.toString() ?? '0') ?? 0));
-
-    // Construct the card as before
     return Card(
       margin: const EdgeInsets.only(bottom: 20),
       child: Padding(
@@ -528,7 +564,7 @@ class _ReportsTabState extends State<ReportsTab> {
                 Icon(Icons.attach_money, color: Colors.purple[700]),
                 const SizedBox(width: 8),
                 Text(
-                  'Revenue Estimates',
+                  'Revenue - $_selectedPeriod',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -540,7 +576,6 @@ class _ReportsTabState extends State<ReportsTab> {
             const SizedBox(height: 12),
             Row(
               children: [
-                // --- Today Revenue ---
                 Expanded(
                   child: Container(
                     padding: const EdgeInsets.all(16),
@@ -557,7 +592,7 @@ class _ReportsTabState extends State<ReportsTab> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Today',
+                          _selectedPeriod,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: Colors.teal[800],
@@ -565,7 +600,7 @@ class _ReportsTabState extends State<ReportsTab> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '₹${todayRevenue.toStringAsFixed(2)}',
+                          '₹${totalRevenue.toStringAsFixed(2)}',
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -573,98 +608,10 @@ class _ReportsTabState extends State<ReportsTab> {
                           ),
                         ),
                         Text(
-                          '${todayVisits.length} visits completed',
+                          '${filteredVisits.length} visits completed',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.teal[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // --- This Week Revenue ---
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.purple[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: BoxBorder.lerp(
-                        Border.all(color: Colors.purple[200]!),
-                        Border.all(color: Colors.purple[200]!),
-                        1.0,
-                      )!,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'This Week',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: Colors.purple[800],
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '₹${weekRevenue.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.purple[700],
-                          ),
-                        ),
-                        Text(
-                          '${weekVisits.length} visits completed',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.purple[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // --- This Month Revenue ---
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.blue[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: BoxBorder.lerp(
-                        Border.all(color: Colors.blue[200]!),
-                        Border.all(color: Colors.blue[200]!),
-                        1.0,
-                      )!,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'This Month',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: Colors.blue[800],
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '₹${monthRevenue.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue[700],
-                          ),
-                        ),
-                        Text(
-                          '${monthVisits.length} visits completed',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.blue[600],
                           ),
                         ),
                       ],
@@ -680,12 +627,15 @@ class _ReportsTabState extends State<ReportsTab> {
   }
 
   Widget _buildPatientReport(AdminFirebaseService firebaseService) {
-    // Use local patient report data which persists through rebuilds
-    final patients = _localPatientReport;
-
-    // Debug Section: Visual confirmation and debugging
+    // Patient report comes from _localPatientReport, but add filter based on 'lastVisit' date string
+    final patientsFiltered = _localPatientReport.where((patient) {
+      final lastVisit = _parseVisitDate(patient['lastVisit']);
+      if (lastVisit == null) return true; // Fallback
+      final range = _getPeriodRange(_selectedPeriod);
+      return !lastVisit.isBefore(range[0]) && lastVisit.isBefore(range[1]);
+    }).toList();
+    // ... rest of card code, substitute 'patients' with 'patientsFiltered' in DataTable
     bool debugMode = true; // Set to true for extra debugging UI
-
     return Card(
       margin: const EdgeInsets.only(bottom: 20),
       child: Padding(
@@ -698,7 +648,7 @@ class _ReportsTabState extends State<ReportsTab> {
                 Icon(Icons.person, color: Colors.teal[700]),
                 const SizedBox(width: 8),
                 Text(
-                  'Patient Report',
+                  'Patient Report ($_selectedPeriod)',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -722,18 +672,18 @@ class _ReportsTabState extends State<ReportsTab> {
             ],
             if (debugMode) ...[
               // Shows patient report list length for quick checking
-              Text('Patient report data count: ${patients.length}',
+              Text('Patient report data count: ${patientsFiltered.length}',
                   style: TextStyle(fontSize: 12, color: Colors.grey[600])),
               // List out the first patient data map for visual debugging
-              if (patients.isNotEmpty)
-                Text('First patient data: ${patients.first.toString()}',
+              if (patientsFiltered.isNotEmpty)
+                Text('First patient data: ${patientsFiltered.first.toString()}',
                     style: TextStyle(fontSize: 11, color: Colors.grey[600]))
               else
                 Text('No patient data received from service',
                     style: TextStyle(fontSize: 11, color: Colors.red)),
               const Divider(),
             ],
-            if (_patientReportLoaded && patients.isEmpty)
+            if (_patientReportLoaded && patientsFiltered.isEmpty)
             // Graceful message for empty state
               Container(
                 padding: const EdgeInsets.all(20),
@@ -756,7 +706,7 @@ class _ReportsTabState extends State<ReportsTab> {
                     DataColumn(label: Text('Doctor')),
                     DataColumn(label: Text('Last Visit')),
                   ],
-                  rows: patients.map((patient) {
+                  rows: patientsFiltered.map((patient) {
                     return DataRow(cells: [
                       DataCell(Text(patient['name'] ?? 'Unknown')),
                       DataCell(Text(patient['therapist'] ?? 'Unknown')),
@@ -772,7 +722,6 @@ class _ReportsTabState extends State<ReportsTab> {
     );
   }
 
-
   List<List<String>> buildExportRows(AdminFirebaseService firebaseService,
       String reportType, {List<Map<String, dynamic>>? patientReportOverride}) {
     final List<List<String>> rows = [];
@@ -780,7 +729,15 @@ class _ReportsTabState extends State<ReportsTab> {
       rows.add(['Doctor Name', 'Total Referrals', 'Completed', 'Pending']);
       final data = firebaseService.reportData['referralsByDoctor'] as List<
           Map<String, dynamic>>? ?? [];
+      final period = _selectedPeriod;
+      final range = _getPeriodRange(period);
       for (final row in data) {
+        // Filter based on createdAt in export too
+        final createdAt = _parseVisitDate(row['createdAt']);
+        if (createdAt != null &&
+            (createdAt.isBefore(range[0]) || !createdAt.isBefore(range[1]))) {
+          continue;
+        }
         rows.add([
           row['doctorName'] ?? '',
           '${row['totalReferrals'] ?? 0}',
@@ -793,7 +750,14 @@ class _ReportsTabState extends State<ReportsTab> {
           ['Therapist Name', 'Total Visits', 'This Week', 'Completion Rate']);
       final data = firebaseService.reportData['visitsByTherapist'] as List<
           Map<String, dynamic>>? ?? [];
+      final period = _selectedPeriod;
+      final range = _getPeriodRange(period);
       for (final row in data) {
+        final createdAt = _parseVisitDate(row['createdAt']);
+        if (createdAt != null &&
+            (createdAt.isBefore(range[0]) || !createdAt.isBefore(range[1]))) {
+          continue;
+        }
         rows.add([
           row['therapistName'] ?? '',
           '${row['totalVisits'] ?? 0}',
@@ -814,27 +778,38 @@ class _ReportsTabState extends State<ReportsTab> {
         ]);
       }
     } else if (reportType == 'Revenue Report') {
-      rows.add(['Metric', 'This Week', 'This Month']);
-      final revenue = firebaseService.reportData['revenueData'] as Map<
-          String,
-          dynamic>? ?? {};
-      rows.add([
-        'Revenue',
-        '₹${revenue['thisWeek'] ?? 0}',
-        '₹${revenue['thisMonth'] ?? 0}'
-      ]);
-      rows.add([
-        'Visits',
-        '${revenue['thisWeekVisits'] ?? 0}',
-        '${revenue['thisMonthVisits'] ?? 0}'
-      ]);
+      // Export must match filter!
+      final List<Map<String, dynamic>> allVisits = firebaseService
+          .reportData['allVisits'] as List<Map<String, dynamic>>? ?? [];
+      final filterPeriod = _selectedPeriod;
+      final periodRange = _getPeriodRange(filterPeriod);
+      final periodStart = periodRange[0];
+      final periodEnd = periodRange[1];
+      final filteredVisits = allVisits.where((v) {
+        final dt = _parseVisitDate(v['visitDate']);
+        return dt != null && !dt.isBefore(periodStart) &&
+            dt.isBefore(periodEnd);
+      }).toList();
+      final double totalRevenue = filteredVisits.fold(0.0, (sum, v) =>
+      sum +
+          (double.tryParse(v['amount']?.toString() ?? '0') ?? 0));
+      rows.add(['Metric', _selectedPeriod]);
+      rows.add(['Revenue', '₹${totalRevenue.toStringAsFixed(2)}']);
+      rows.add(['Visits', '${filteredVisits.length}']);
     } else if (reportType == 'Patient Report') {
       // Use patientReportOverride if provided, else fallback to firebaseService
       final data = patientReportOverride ??
           firebaseService.reportData['patientReport'] as List<
               Map<String, dynamic>>? ?? [];
+      final period = _selectedPeriod;
+      final range = _getPeriodRange(period);
       rows.add(['Patient Name', 'Therapist', 'Doctor', 'Last Visit']);
       for (final row in data) {
+        final lastVisit = _parseVisitDate(row['lastVisit']);
+        if (lastVisit != null &&
+            (lastVisit.isBefore(range[0]) || !lastVisit.isBefore(range[1]))) {
+          continue;
+        }
         rows.add([
           row['name'] ?? '',
           row['therapist'] ?? '',
@@ -900,7 +875,14 @@ class _ReportsTabState extends State<ReportsTab> {
           dynamic>? ?? {};
       if (dataR.isNotEmpty) {
         rows.add(['Doctor Name', 'Total Referrals', 'Completed', 'Pending']);
+        final period = _selectedPeriod;
+        final range = _getPeriodRange(period);
         for (final row in dataR) {
+          final createdAt = _parseVisitDate(row['createdAt']);
+          if (createdAt != null &&
+              (createdAt.isBefore(range[0]) || !createdAt.isBefore(range[1]))) {
+            continue;
+          }
           rows.add([
             row['doctorName'] ?? '',
             '${row['totalReferrals'] ?? 0}',
@@ -913,7 +895,14 @@ class _ReportsTabState extends State<ReportsTab> {
       if (dataV.isNotEmpty) {
         rows.add(
             ['Therapist Name', 'Total Visits', 'This Week', 'Completion Rate']);
+        final period = _selectedPeriod;
+        final range = _getPeriodRange(period);
         for (final row in dataV) {
+          final createdAt = _parseVisitDate(row['createdAt']);
+          if (createdAt != null &&
+              (createdAt.isBefore(range[0]) || !createdAt.isBefore(range[1]))) {
+            continue;
+          }
           rows.add([
             row['therapistName'] ?? '',
             '${row['totalVisits'] ?? 0}',
@@ -953,9 +942,16 @@ class _ReportsTabState extends State<ReportsTab> {
       final patientExport = patientReportOverride ??
           firebaseService.reportData['patientReport'] as List<
               Map<String, dynamic>>? ?? [];
+      final period = _selectedPeriod;
+      final range = _getPeriodRange(period);
       if (patientExport.isNotEmpty) {
         rows.add(['Patient Name', 'Therapist', 'Doctor', 'Last Visit']);
         for (final row in patientExport) {
+          final lastVisit = _parseVisitDate(row['lastVisit']);
+          if (lastVisit != null &&
+              (lastVisit.isBefore(range[0]) || !lastVisit.isBefore(range[1]))) {
+            continue;
+          }
           rows.add([
             row['name'] ?? '',
             row['therapist'] ?? '',
@@ -1021,7 +1017,10 @@ class _ReportsTabState extends State<ReportsTab> {
           pageWidgets.add(buildSection(
             heading: 'Referrals by Doctor',
             headers: rRows[0],
-            dataRows: rRows.sublist(1).where((row) => row.isNotEmpty).toList(),
+            dataRows: rRows
+                .sublist(1)
+                .where((row) => row.isNotEmpty)
+                .toList(),
             headerColor: PdfColor.fromHex('#E3F2FD'),
           ));
         }
@@ -1030,7 +1029,10 @@ class _ReportsTabState extends State<ReportsTab> {
           pageWidgets.add(buildSection(
             heading: 'Visits by Therapist',
             headers: vRows[0],
-            dataRows: vRows.sublist(1).where((row) => row.isNotEmpty).toList(),
+            dataRows: vRows
+                .sublist(1)
+                .where((row) => row.isNotEmpty)
+                .toList(),
             headerColor: PdfColor.fromHex('#E8F5E9'),
           ));
         }
@@ -1039,7 +1041,10 @@ class _ReportsTabState extends State<ReportsTab> {
           pageWidgets.add(buildSection(
             heading: 'Pending Follow-ups',
             headers: fRows[0],
-            dataRows: fRows.sublist(1).where((row) => row.isNotEmpty).toList(),
+            dataRows: fRows
+                .sublist(1)
+                .where((row) => row.isNotEmpty)
+                .toList(),
             headerColor: PdfColor.fromHex('#FFF3E0'),
           ));
         }

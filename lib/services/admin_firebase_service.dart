@@ -344,11 +344,21 @@ class AdminFirebaseService extends ChangeNotifier {
       QuerySnapshot snapshot = await _firestore.collection('referrals').get();
 
       Map<String, Map<String, dynamic>> doctorStats = {};
+      Map<String, DateTime> doctorFirstReferral = {};
 
       for (var doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final doctorName = data['doctorName'] ?? 'Unknown Doctor';
         final status = data['currentStatus'] ?? 'Pending';
+        final createdAtRaw = data['createdAt'];
+        DateTime? createdAt;
+        if (createdAtRaw != null) {
+          try {
+            createdAt = createdAtRaw is Timestamp
+                ? createdAtRaw.toDate()
+                : DateTime.parse(createdAtRaw.toString());
+          } catch (_) {}
+        }
 
         if (!doctorStats.containsKey(doctorName)) {
           doctorStats[doctorName] = {
@@ -358,9 +368,15 @@ class AdminFirebaseService extends ChangeNotifier {
             'pending': 0,
             'ongoing': 0,
           };
+          if (createdAt != null) doctorFirstReferral[doctorName] = createdAt;
         }
 
         doctorStats[doctorName]!['totalReferrals']++;
+        if (createdAt != null && (
+            doctorFirstReferral[doctorName] == null ||
+                createdAt.isBefore(doctorFirstReferral[doctorName]!))) {
+          doctorFirstReferral[doctorName] = createdAt;
+        }
 
         if (status.toLowerCase().contains('completed')) {
           doctorStats[doctorName]!['completed']++;
@@ -372,7 +388,13 @@ class AdminFirebaseService extends ChangeNotifier {
         }
       }
 
-      return doctorStats.values.toList();
+      // Add createdAt to each doctor's map, fallback to DateTime(2000) if not found
+      return doctorStats.entries.map((e) {
+        return {
+          ...e.value,
+          'createdAt': doctorFirstReferral[e.key] ?? DateTime(2000, 1, 1),
+        };
+      }).toList();
     } catch (e) {
       print('❌ Error getting referrals by doctor: $e');
       return [];
@@ -384,6 +406,7 @@ class AdminFirebaseService extends ChangeNotifier {
       QuerySnapshot snapshot = await _firestore.collection('visits').get();
 
       Map<String, Map<String, dynamic>> therapistStats = {};
+      Map<String, DateTime> therapistLastVisit = {};
       final now = DateTime.now();
       final thisWeekStart = now.subtract(Duration(days: now.weekday - 1));
 
@@ -391,29 +414,37 @@ class AdminFirebaseService extends ChangeNotifier {
         final data = doc.data() as Map<String, dynamic>;
         final therapistId = data['therapistId'] ?? '';
         final visitDate = _toDate(data['visitDate']);
-
         if (therapistId.isEmpty) continue;
-
         // Get therapist name
         final therapistName = await _getTherapistName(therapistId);
-
         if (!therapistStats.containsKey(therapistId)) {
           therapistStats[therapistId] = {
+            'therapistId': therapistId,
             'therapistName': therapistName,
             'totalVisits': 0,
             'thisWeekVisits': 0,
             'completionRate': 95, // Mock data for now
           };
         }
-
         therapistStats[therapistId]!['totalVisits']++;
-
+        if (visitDate != null) {
+          if (therapistLastVisit[therapistId] == null ||
+              visitDate.isAfter(therapistLastVisit[therapistId]!)) {
+            therapistLastVisit[therapistId] = visitDate;
+          }
+        }
         if (visitDate != null && visitDate.isAfter(thisWeekStart)) {
           therapistStats[therapistId]!['thisWeekVisits']++;
         }
       }
 
-      return therapistStats.values.toList();
+      // Add createdAt to each therapist's map, fallback to DateTime(2000) if not found
+      return therapistStats.entries.map((e) {
+        return {
+          ...e.value,
+          'createdAt': therapistLastVisit[e.key] ?? DateTime(2000, 1, 1),
+        };
+      }).toList();
     } catch (e) {
       print('❌ Error getting visits by therapist: $e');
       return [];
