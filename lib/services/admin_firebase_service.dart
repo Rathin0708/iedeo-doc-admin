@@ -311,6 +311,14 @@ class AdminFirebaseService extends ChangeNotifier {
       // Visit statistics
       final visitStats = await _getVisitStatistics();
 
+      // --- NEW: Fetch all visits and add to reportData for UI detailed breakdowns ---
+      final allVisitsSnapshot = await _firestore.collection('visits').get();
+      final allVisits = allVisitsSnapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return { ...data, 'id': doc.id};
+      }).toList();
+      // ---
+
       _reportData = {
         'referralsByDoctor': referralsByDoctor,
         'visitsByTherapist': visitsByTherapist,
@@ -322,6 +330,7 @@ class AdminFirebaseService extends ChangeNotifier {
         'completedVisits': visitStats['completedVisits'] ?? 0,
         'pendingFollowupsCount': pendingFollowups.length,
         'estimatedRevenue': revenueData['thisMonth'] ?? 0,
+        'allVisits': allVisits, // Add the actual visits list for UI reports
       };
 
       notifyListeners();

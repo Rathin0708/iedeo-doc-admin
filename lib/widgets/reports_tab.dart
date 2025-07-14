@@ -461,48 +461,61 @@ class _ReportsTabState extends State<ReportsTab> {
   }
 
   Widget _buildRevenueReport(AdminFirebaseService firebaseService) {
-    // Assume allVisits contains the full list of visit logs from Firestore
+    // Get all visits data from the backend
     final List<Map<String, dynamic>> allVisits = firebaseService
         .reportData['allVisits'] as List<Map<String, dynamic>>? ?? [];
-
     final now = DateTime.now();
-    // Helper for date (with only yyyy-mm-dd, for today matching)
-    String dateKey(DateTime dt) =>
-        '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day
-            .toString()
-            .padLeft(2, '0')}';
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final tomorrowStart = todayStart.add(const Duration(days: 1));
 
-    // Find today's Visits
-    final String todayKey = dateKey(now);
+    // Helper for parsing/best-effort normalization
+    DateTime? parseVisitDate(dynamic d) {
+      if (d == null) return null;
+      if (d is DateTime) return d;
+      try { // Try Timestamp (from Firestore)
+        return d.toDate();
+      } catch (_) {}
+      try {
+        return DateTime.parse(d.toString());
+      } catch (_) {}
+      return null;
+    }
+
+    // --- Today ---
     final todayVisits = allVisits.where((v) {
-      final dtStr = v['visitDate']?.toString()?.substring(0, 10) ?? '';
-      return dtStr == todayKey;
+      final dt = parseVisitDate(v['visitDate']);
+      return dt != null && dt.isAtSameMomentAs(todayStart) || (dt != null &&
+          dt.isAfter(todayStart.subtract(const Duration(seconds: 1))) &&
+          dt.isBefore(tomorrowStart));
     }).toList();
     final double todayRevenue = todayVisits.fold(0.0, (sum, v) =>
-    sum + (double.tryParse(v['amount']?.toString() ?? '0') ?? 0));
+    sum +
+        (double.tryParse(v['amount']?.toString() ?? '0') ?? 0));
 
-    // This week: from the beginning of this week (Monday)
-    final monday = now.subtract(Duration(days: now.weekday - 1));
+    // --- This Week ---
+    final weekStart = todayStart.subtract(
+        Duration(days: todayStart.weekday - 1));
     final weekVisits = allVisits.where((v) {
-      final dt = DateTime.tryParse(v['visitDate']?.toString() ?? '');
-      return dt != null &&
-          dt.isAfter(monday.subtract(const Duration(seconds: 1))) &&
-          dt.isBefore(now.add(const Duration(days: 1)));
+      final dt = parseVisitDate(v['visitDate']);
+      return dt != null && !dt.isBefore(weekStart) &&
+          dt.isBefore(tomorrowStart);
     }).toList();
     final double weekRevenue = weekVisits.fold(0.0, (sum, v) =>
-    sum + (double.tryParse(v['amount']?.toString() ?? '0') ?? 0));
+    sum +
+        (double.tryParse(v['amount']?.toString() ?? '0') ?? 0));
 
-    // This month
-    final thisMonthStart = DateTime(now.year, now.month, 1);
+    // --- This Month ---
+    final monthStart = DateTime(now.year, now.month, 1);
     final monthVisits = allVisits.where((v) {
-      final dt = DateTime.tryParse(v['visitDate']?.toString() ?? '');
-      return dt != null &&
-          dt.isAfter(thisMonthStart.subtract(const Duration(seconds: 1))) &&
-          dt.isBefore(now.add(const Duration(days: 1)));
+      final dt = parseVisitDate(v['visitDate']);
+      return dt != null && !dt.isBefore(monthStart) &&
+          dt.isBefore(tomorrowStart);
     }).toList();
     final double monthRevenue = monthVisits.fold(0.0, (sum, v) =>
-    sum + (double.tryParse(v['amount']?.toString() ?? '0') ?? 0));
+    sum +
+        (double.tryParse(v['amount']?.toString() ?? '0') ?? 0));
 
+    // Construct the card as before
     return Card(
       margin: const EdgeInsets.only(bottom: 20),
       child: Padding(
