@@ -344,11 +344,4 @@ class _SettingScreenState extends State<SettingScreen> {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(title,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-    );
-  }
 }
