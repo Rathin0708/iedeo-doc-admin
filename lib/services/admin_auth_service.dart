@@ -335,149 +335,124 @@ class AdminAuthService extends ChangeNotifier {
     return false;
   }
 
-  Future<bool> signInWithGoogle() async {
-    if (_googleSignInInProgress) return false;
+  // Shared helper: signs in with Google and returns the User, or null if cancelled/failed.
+  Future<User?> _handleGoogleUserAuth() async {
+    User? user;
+    if (kIsWeb) {
+      GoogleAuthProvider googleProvider = GoogleAuthProvider();
+      googleProvider.addScope('email');
+      googleProvider.addScope('profile');
+      final UserCredential userCredential =
+      await _auth.signInWithPopup(googleProvider);
+      user = userCredential.user;
+    } else {
+      await _ensureGoogleSignInInitialized();
+      if (!_isGoogleSignInAvailable || _googleSignIn == null) {
+        return null;
+      }
+      final GoogleSignInAccount? googleUser = await _googleSignIn!.signIn();
+      if (googleUser == null) {
+        return null;
+      }
+      final GoogleSignInAuthentication googleAuth =
+      await googleUser.authentication;
+      if (googleAuth.accessToken == null || googleAuth.idToken == null) {
+        return null;
+      }
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      final UserCredential result =
+      await _auth.signInWithCredential(credential);
+      user = result.user;
+    }
+    return user;
+  }
 
+  /// GOOGLE REGISTRATION UPGRADE: Two-step flow
+  /// Step 1: Only run Google Auth, do not write to DB. Caller must prompt for name.
+  Future<User?> googleAuthOnlyForRegistration() async {
+    return await _handleGoogleUserAuth();
+  }
+
+  /// Step 2: Finalize registration with a manual name (not displayName from Google!).
+  /// Only called after googleAuthOnlyForRegistration succeeds.
+  Future<bool> finalizeGoogleSignUp(User user, String name) async {
     _isLoadingGoogle = true;
-    _googleSignInInProgress = true;
-    _lastGoogleSignInCancelled = false;
     _errorMessage = null;
     notifyListeners();
-
     try {
-      User? user;
-
-      if (kIsWeb) {
-        // Web Sign-In
-        try {
-          await _auth.setPersistence(Persistence.LOCAL);
-          GoogleAuthProvider googleProvider = GoogleAuthProvider();
-          googleProvider.addScope('email');
-          googleProvider.addScope('profile');
-
-          final UserCredential userCredential =
-          await _auth.signInWithPopup(googleProvider);
-          user = userCredential.user;
-
-          if (user == null) {
-            _errorMessage = 'Google Sign-In cancelled!';
-            _lastGoogleSignInCancelled = true;
-            _isLoadingGoogle = false;
-            _googleSignInInProgress = false;
-            notifyListeners();
-            return false;
-          }
-        } catch (webAuthError) {
-          _errorMessage = webAuthError.toString().contains('popup-closed-by-user')
-              ? 'Google Sign-In cancelled!'
-              : 'Google sign-in failed: ${webAuthError.toString()}';
-          _lastGoogleSignInCancelled = true;
-          _isLoadingGoogle = false;
-          _googleSignInInProgress = false;
-          notifyListeners();
-          return false;
-        }
-      } else {
-        // Mobile Sign-In
-        await _ensureGoogleSignInInitialized();
-
-        if (!_isGoogleSignInAvailable || _googleSignIn == null) {
-          _errorMessage = 'Google Sign-In not available on this device';
-          _isLoadingGoogle = false;
-          _googleSignInInProgress = false;
-          notifyListeners();
-          return false;
-        }
-
-        try {
-          final GoogleSignInAccount? googleUser = await _googleSignIn!.signIn();
-          if (googleUser == null) {
-            _errorMessage = 'Google Sign-In cancelled!';
-            _lastGoogleSignInCancelled = true;
-            _isLoadingGoogle = false;
-            _googleSignInInProgress = false;
-            notifyListeners();
-            return false;
-          }
-
-          final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-          if (googleAuth.accessToken == null || googleAuth.idToken == null) {
-            _errorMessage = 'Failed to get Google credentials';
-            _isLoadingGoogle = false;
-            _googleSignInInProgress = false;
-            notifyListeners();
-            return false;
-          }
-
-          final AuthCredential credential = GoogleAuthProvider.credential(
-            accessToken: googleAuth.accessToken,
-            idToken: googleAuth.idToken,
-          );
-
-          final UserCredential result =
-          await _auth.signInWithCredential(credential);
-          user = result.user;
-        } catch (mobileAuthError) {
-          _errorMessage =
-          'Google sign-in failed: ${mobileAuthError.toString()}';
-          _isLoadingGoogle = false;
-          _googleSignInInProgress = false;
-          notifyListeners();
-          return false;
-        }
-      }
-
-      // ADMIN EMAIL FIRESTORE CHECK FOR GOOGLE SIGN-UP
-      if (user != null && user.email != null && user.email!.isNotEmpty) {
-        // Query Firestore if admin with this email already exists (any UID or provider)
-        try {
-          final querySnapshot = await _firestore
-              .collection('admins')
-              .where('email', isEqualTo: user.email)
-              .limit(1)
-              .get();
-          if (querySnapshot.docs.isEmpty) {
-            // Not present in admins: do not allow login
-            _errorMessage =
-            'Invalid email or unauthorized: please contact admin.';
-            await signOut();
-            _isLoadingGoogle = false;
-            _googleSignInInProgress = false;
-            notifyListeners();
-            return false;
-          }
-        } catch (e) {
-          // Fallback: Block login if we could not verify Firestore
-          _errorMessage = 'Unable to verify admin privileges. Try again.';
-          await signOut();
-          _isLoadingGoogle = false;
-          _googleSignInInProgress = false;
-          notifyListeners();
-          return false;
-        }
-      }
-      // END ADMIN FIRESTORE CHECK
-
-      if (user != null) {
-        _createInstantSession(user);
-        await _createAdminFromGoogleInBackground(user);
+      // Check if already registered
+      final admins = await _firestore
+          .collection('admins')
+          .where('email', isEqualTo: user.email)
+          .limit(1)
+          .get();
+      if (admins.docs.isNotEmpty) {
+        _errorMessage = 'This email is already registered.';
+        await signOut();
         _isLoadingGoogle = false;
-        _googleSignInInProgress = false;
-        notifyListeners();
-        return true;
-      } else {
-        _errorMessage = 'Failed to authenticate with Google';
-        _isLoadingGoogle = false;
-        _googleSignInInProgress = false;
         notifyListeners();
         return false;
       }
+      // Register user as admin with manual name input only
+      await _firestore.collection('admins').doc(user.uid).set({
+        'uid': user.uid,
+        'name': name, // Use UI input, not Google provided
+        'email': user.email,
+        'role': 'admin',
+        'status': 'active',
+        'createdAt': FieldValue.serverTimestamp(),
+        'authProvider': 'google',
+        'lastLogin': FieldValue.serverTimestamp(),
+      });
+      _createInstantSession(user);
+      _isLoadingGoogle = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = 'Google sign-up failed: ${e.toString()}';
+      _isLoadingGoogle = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Google Log-In (Signin as admin via Google; must be an existing admin)
+  Future<bool> signInWithGoogleOnly() async {
+    _isLoadingGoogle = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final User? user = await _handleGoogleUserAuth();
+      if (user == null) {
+        _errorMessage = 'Google Sign-In cancelled!';
+        notifyListeners();
+        _isLoadingGoogle = false;
+        return false;
+      }
+      // Allow login only if email is registered in admins
+      final admins = await _firestore
+          .collection('admins')
+          .where('email', isEqualTo: user.email)
+          .limit(1)
+          .get();
+      if (admins.docs.isEmpty) {
+        _errorMessage = 'Account not registered as admin.';
+        await signOut();
+        _isLoadingGoogle = false;
+        notifyListeners();
+        return false;
+      }
+      // Allow login: no changes in Firestore.
+      _createInstantSession(user);
+      _isLoadingGoogle = false;
+      notifyListeners();
+      return true;
     } catch (e) {
       _errorMessage = 'Google sign-in failed: ${e.toString()}';
       _isLoadingGoogle = false;
-      _googleSignInInProgress = false;
       notifyListeners();
       return false;
     }

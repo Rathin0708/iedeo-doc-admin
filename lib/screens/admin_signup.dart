@@ -102,16 +102,30 @@ class _AdminSignupState extends State<AdminSignup>
   // Redirect after Google sign up success
   Future<void> _handleGoogleSignUp(AdminAuthService authService) async {
     try {
-      bool success = await authService.signInWithGoogle();
-      if (mounted) {
-        if (success) {
-          // Navigate to dashboard after Google sign-up
-          Navigator.of(context).pushReplacementNamed('/dashboard');
-        } else if (authService.errorMessage != null) {
-          _showErrorDialog(authService.errorMessage!);
-        } else {
-          _showErrorDialog('Google authentication failed. Please try again.');
-        }
+      // Step 1: Google OAuth
+      final user = await authService.googleAuthOnlyForRegistration();
+      if (user == null) {
+        if (!mounted) return;
+        _showErrorDialog("Google Sign-Up failed.");
+        return;
+      }
+      // Step 2: Prompt for user name via dialog
+      final String? enteredName = await _promptForName();
+      if (!mounted) return;
+      if (enteredName == null || enteredName.trim().length < 2) {
+        _showErrorDialog("Please enter your full name.");
+        await authService.signOut();
+        return;
+      }
+      // Step 3: Finish registration with manual name entry and Google email
+      final bool success = await authService.finalizeGoogleSignUp(user, enteredName.trim());
+      if (!mounted) return;
+      if (success) {
+        Navigator.of(context).pushReplacementNamed('/dashboard');
+      } else if (authService.errorMessage != null) {
+        _showErrorDialog(authService.errorMessage!);
+      } else {
+        _showErrorDialog('Google authentication failed. Please try again.');
       }
     } catch (e) {
       if (mounted) {
@@ -119,6 +133,39 @@ class _AdminSignupState extends State<AdminSignup>
       }
     }
   }
+  Future<String?> _promptForName() async {
+    String? name;
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        final controller = TextEditingController();
+        return AlertDialog(
+          title: const Text("Enter Full Name"),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: "Full Name"),
+          ),
+          actions: [
+            TextButton(
+              child: const Text("Cancel"),
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+            ElevatedButton(
+              child: const Text("Continue"),
+              onPressed: () {
+                name = controller.text;
+                Navigator.of(ctx).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+    return name;
+  }
+
 
   Future<void> _signUp() async {
     if (!_formKey.currentState!.validate() || !_acceptedTerms) {

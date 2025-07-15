@@ -43,7 +43,7 @@ class _AdminLoginState extends State<AdminLogin> {
     try {
       // No need to call setState here; loading is managed by provider's isLoading state
       // Attempt Google Sign-In
-      final success = await authService.signInWithGoogle();
+      final success = await authService.signInWithGoogleOnly();
       if (mounted) {
         if (!success && authService.errorMessage != null) {
           // Show specific error message from auth service
