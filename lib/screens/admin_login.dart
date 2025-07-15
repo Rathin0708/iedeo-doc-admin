@@ -40,30 +40,23 @@ class _AdminLoginState extends State<AdminLogin> {
 
   Future<void> _signInWithGoogle() async {
     final authService = Provider.of<AdminAuthService>(context, listen: false);
-    
     try {
-      // Show a loading indicator
-      setState(() {});
-      
+      // No need to call setState here; loading is managed by provider's isLoading state
       // Attempt Google Sign-In
       final success = await authService.signInWithGoogle();
-
       if (mounted) {
         if (!success && authService.errorMessage != null) {
           // Show specific error message from auth service
           _showErrorSnackBar(authService.errorMessage!);
-          
-          // Log the error for debugging
+          // Log error for debugging
           debugPrint('Google Sign-In error: ${authService.errorMessage}');
         } else if (!success) {
-          // Generic error message if no specific message is available
           _showErrorSnackBar('Google Sign-In failed. Please try again.');
         }
-        // Success message is not needed as the user will be redirected to the dashboard
+        // On success, user will be redirected elsewhere (no snackbar needed)
       }
     } catch (e) {
       if (mounted) {
-        // Handle any unexpected exceptions
         _showErrorSnackBar('Google Sign-In failed: ${e.toString()}');
         debugPrint('Google Sign-In exception: $e');
       }
@@ -370,7 +363,7 @@ class _AdminLoginState extends State<AdminLogin> {
                                       width: double.infinity,
                                       height: 50,
                                       child: ElevatedButton(
-                                        onPressed: authService.isLoading
+                                        onPressed: authService.isLoadingNormal
                                             ? null
                                             : _signIn,
                                         style: ElevatedButton.styleFrom(
@@ -383,7 +376,7 @@ class _AdminLoginState extends State<AdminLogin> {
                                                 12),
                                           ),
                                         ),
-                                        child: authService.isLoading
+                                        child: authService.isLoadingNormal
                                             ? const SizedBox(
                                           height: 20,
                                           width: 20,
@@ -451,10 +444,11 @@ class _AdminLoginState extends State<AdminLogin> {
                                             borderRadius: BorderRadius.circular(12),
                                           ),
                                           child: OutlinedButton.icon(
-                                            onPressed: authService.isLoading
+                                            onPressed: authService
+                                                .isLoadingGoogle
                                                 ? null
                                                 : _signInWithGoogle,
-                                            icon: authService.isLoading
+                                            icon: authService.isLoadingGoogle
                                                 ? const SizedBox(
                                               height: 20,
                                               width: 20,
@@ -467,7 +461,7 @@ class _AdminLoginState extends State<AdminLogin> {
                                               width: 24,
                                             ),
                                             label: Text(
-                                              authService.isLoading
+                                              authService.isLoadingGoogle
                                                   ? 'Signing in with Google...'
                                                   : 'Continue with Google',
                                               style: const TextStyle(

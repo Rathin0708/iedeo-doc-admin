@@ -46,7 +46,8 @@ class AdminAuthService extends ChangeNotifier {
   bool _isGoogleSignInAvailable = false;
 
   bool _isAuthenticated = false;
-  bool _isLoading = false;
+  bool _isLoadingNormal = false;
+  bool _isLoadingGoogle = false;
   String? _errorMessage;
   String? _adminName;
   String? _adminEmail;
@@ -56,12 +57,22 @@ class AdminAuthService extends ChangeNotifier {
   static AdminUser? _cachedAdmin;
   static DateTime? _lastCacheTime;
   static const Duration _cacheTimeout = Duration(hours: 24);
-  static bool _skipFirebaseQueries = false;
+  static final bool _skipFirebaseQueries = false;
+
+  // Prevents repeated/overlapping Google logins
+  bool _googleSignInInProgress = false;
+  bool _lastGoogleSignInCancelled = false;
+
+  bool get isGoogleSignInInProgress => _googleSignInInProgress;
+
+  bool get lastGoogleSignInCancelled => _lastGoogleSignInCancelled;
 
   // Getters
   bool get isAuthenticated => _isAuthenticated;
 
-  bool get isLoading => _isLoading;
+  bool get isLoadingNormal => _isLoadingNormal;
+
+  bool get isLoadingGoogle => _isLoadingGoogle;
 
   String? get errorMessage => _errorMessage;
 
@@ -215,8 +226,7 @@ class AdminAuthService extends ChangeNotifier {
   }
 
   Future<bool> signIn(String email, String password) async {
-    _isLoading = true;
-    _errorMessage = null;
+    _isLoadingNormal = true;
     notifyListeners();
 
     try {
@@ -230,7 +240,6 @@ class AdminAuthService extends ChangeNotifier {
 
         // Update Firebase in background
         _updateLastLoginInBackground(result.user!.uid);
-
         return true;
       }
       return false;
@@ -241,7 +250,7 @@ class AdminAuthService extends ChangeNotifier {
       _errorMessage = 'Login failed: ${e.toString()}';
       _isAuthenticated = false;
     } finally {
-      _isLoading = false;
+      _isLoadingNormal = false;
       notifyListeners();
     }
     return false;
@@ -253,7 +262,7 @@ class AdminAuthService extends ChangeNotifier {
     required String password,
     required String role,
   }) async {
-    _isLoading = true;
+    _isLoadingNormal = true;
     _errorMessage = null;
     notifyListeners();
 
@@ -292,116 +301,126 @@ class AdminAuthService extends ChangeNotifier {
       _errorMessage = 'Signup failed: ${e.toString()}';
       _isAuthenticated = false;
     } finally {
-      _isLoading = false;
+      _isLoadingNormal = false;
       notifyListeners();
     }
     return false;
   }
 
   Future<bool> signInWithGoogle() async {
-    _isLoading = true;
+    if (_googleSignInInProgress) return false;
+
+    _isLoadingGoogle = true;
+    _googleSignInInProgress = true;
+    _lastGoogleSignInCancelled = false;
     _errorMessage = null;
     notifyListeners();
 
     try {
       User? user;
-      
-      // For web platform, use Firebase's built-in Google auth directly
+
       if (kIsWeb) {
+        // Web Sign-In
         try {
-          // Set persistence to LOCAL for better user experience
           await _auth.setPersistence(Persistence.LOCAL);
-          
-          // Create a Google Auth Provider
           GoogleAuthProvider googleProvider = GoogleAuthProvider();
           googleProvider.addScope('email');
           googleProvider.addScope('profile');
-          
-          // Try popup method first as it's more reliable for debugging
-          try {
-            final UserCredential userCredential = await _auth.signInWithPopup(googleProvider);
-            user = userCredential.user;
-            debugPrint('Google sign-in with popup successful');
-          } catch (popupError) {
-            debugPrint('Popup auth failed, trying redirect: $popupError');
-            
-            // Fallback to redirect if popup fails
-            await _auth.signInWithRedirect(googleProvider);
-            final userCredential = await _auth.getRedirectResult();
-            user = userCredential.user;
-            debugPrint('Google sign-in with redirect successful');
+
+          final UserCredential userCredential =
+          await _auth.signInWithPopup(googleProvider);
+          user = userCredential.user;
+
+          if (user == null) {
+            _errorMessage = 'Google Sign-In cancelled!';
+            _lastGoogleSignInCancelled = true;
+            _isLoadingGoogle = false;
+            _googleSignInInProgress = false;
+            notifyListeners();
+            return false;
           }
         } catch (webAuthError) {
-          debugPrint('Web auth completely failed: $webAuthError');
-          _errorMessage = 'Google sign-in failed: ${webAuthError.toString()}';
+          _errorMessage = webAuthError.toString().contains('popup-closed-by-user')
+              ? 'Google Sign-In cancelled!'
+              : 'Google sign-in failed: ${webAuthError.toString()}';
+          _lastGoogleSignInCancelled = true;
+          _isLoadingGoogle = false;
+          _googleSignInInProgress = false;
+          notifyListeners();
           return false;
         }
       } else {
-        // Mobile authentication flow
+        // Mobile Sign-In
         await _ensureGoogleSignInInitialized();
 
         if (!_isGoogleSignInAvailable || _googleSignIn == null) {
           _errorMessage = 'Google Sign-In not available on this device';
+          _isLoadingGoogle = false;
+          _googleSignInInProgress = false;
           notifyListeners();
           return false;
         }
 
         try {
           final GoogleSignInAccount? googleUser = await _googleSignIn!.signIn();
-
           if (googleUser == null) {
-            _errorMessage = 'Sign in canceled by user';
+            _errorMessage = 'Google Sign-In cancelled!';
+            _lastGoogleSignInCancelled = true;
+            _isLoadingGoogle = false;
+            _googleSignInInProgress = false;
+            notifyListeners();
             return false;
           }
 
-          final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+          final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
 
-          if (googleAuth.accessToken == null) {
-            _errorMessage = 'Failed to get Google access token';
+          if (googleAuth.accessToken == null || googleAuth.idToken == null) {
+            _errorMessage = 'Failed to get Google credentials';
+            _isLoadingGoogle = false;
+            _googleSignInInProgress = false;
+            notifyListeners();
             return false;
           }
 
-          final credential = GoogleAuthProvider.credential(
+          final AuthCredential credential = GoogleAuthProvider.credential(
             accessToken: googleAuth.accessToken,
             idToken: googleAuth.idToken,
           );
 
-          final UserCredential result = await _auth.signInWithCredential(credential);
+          final UserCredential result =
+          await _auth.signInWithCredential(credential);
           user = result.user;
-          debugPrint('Google sign-in on mobile successful');
         } catch (mobileAuthError) {
-          debugPrint('Mobile auth failed: $mobileAuthError');
-          _errorMessage = 'Google sign-in failed: ${mobileAuthError.toString()}';
+          _errorMessage =
+          'Google sign-in failed: ${mobileAuthError.toString()}';
+          _isLoadingGoogle = false;
+          _googleSignInInProgress = false;
+          notifyListeners();
           return false;
         }
       }
 
-      // If we have a user at this point, authentication succeeded
       if (user != null) {
-        // Create session immediately for responsive UI
         _createInstantSession(user);
-        
-        // Try to create admin document in background, but don't fail if it doesn't work
-        try {
-          await _createAdminFromGoogleInBackground(user);
-        } catch (dbError) {
-          // Just log the error but don't fail the sign-in
-          debugPrint('Admin document creation failed (non-blocking): $dbError');
-        }
-        
+        await _createAdminFromGoogleInBackground(user);
+        _isLoadingGoogle = false;
+        _googleSignInInProgress = false;
+        notifyListeners();
         return true;
+      } else {
+        _errorMessage = 'Failed to authenticate with Google';
+        _isLoadingGoogle = false;
+        _googleSignInInProgress = false;
+        notifyListeners();
+        return false;
       }
-      
-      _errorMessage = 'Failed to authenticate with Google';
-      return false;
     } catch (e) {
-      debugPrint('Google sign-in unexpected error: $e');
       _errorMessage = 'Google sign-in failed: ${e.toString()}';
-      _isAuthenticated = false;
-      return false;
-    } finally {
-      _isLoading = false;
+      _isLoadingGoogle = false;
+      _googleSignInInProgress = false;
       notifyListeners();
+      return false;
     }
   }
 
@@ -447,7 +466,9 @@ class AdminAuthService extends ChangeNotifier {
 
       return adminsQuery.docs.isNotEmpty;
     } catch (e) {
-      print('🔄 Admin existence check failed: $e');
+      if (kDebugMode) {
+        print('🔄 Admin existence check failed: $e');
+      }
       return false;
     }
   }
@@ -459,12 +480,12 @@ class AdminAuthService extends ChangeNotifier {
 
   /// Sends a password reset email to the given email address. Returns true if sent, false if failed.
   Future<bool> sendPasswordResetEmail(String email) async {
-    _isLoading = true;
+    _isLoadingNormal = true;
     _errorMessage = null;
     notifyListeners();
     try {
       await _auth.sendPasswordResetEmail(email: email.trim());
-      _isLoading = false;
+      _isLoadingNormal = false;
       notifyListeners();
       return true;
     } on FirebaseAuthException catch (e) {
@@ -472,7 +493,7 @@ class AdminAuthService extends ChangeNotifier {
     } catch (e) {
       _errorMessage = 'Reset failed: ${e.toString()}';
     } finally {
-      _isLoading = false;
+      _isLoadingNormal = false;
       notifyListeners();
     }
     return false;

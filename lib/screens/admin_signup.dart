@@ -107,7 +107,10 @@ class _AdminSignupState extends State<AdminSignup> {
                 'Admin account created successfully. You are now logged in.'),
             actions: [
               TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
+                onPressed: () {
+                  Navigator.of(ctx).pop(); // Close the dialog
+                  Navigator.of(context).pop(); // Pop back to login screen
+                },
                 child: const Text('OK'),
               ),
             ],
@@ -375,35 +378,39 @@ class _AdminSignupState extends State<AdminSignup> {
                               Consumer<AdminAuthService>(
                                 builder: (context, authService, child) {
                                   return SizedBox(
-
                                     width: double.infinity,
                                     height: 50,
-                                      child: ElevatedButton(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Color(0xFF4CAF7E), // Custom green color
-                                          foregroundColor: Colors.white,
-                                          elevation: 2,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                        ),
-                                        onPressed: authService.isLoading ? null : _signUp,
-                                        child: authService.isLoading
-                                            ? const SizedBox(
-                                          height: 20,
-                                          width: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                          ),
-                                        )
-                                            : const Text(
-                                          'Create Admin Account',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Color(0xFF4CAF7E),
+                                        // Custom green color
+                                        foregroundColor: Colors.white,
+                                        elevation: 2,
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                                12)),
+                                      ),
+                                      onPressed: authService.isLoadingNormal
+                                          ? null
+                                          : _signUp,
+                                      child: authService.isLoadingNormal
+                                          ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation<
+                                              Color>(Colors.white),
                                         ),
                                       )
-
+                                          : const Text(
+                                        'Create Admin Account',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
                                   );
                                 },
                               ),
@@ -452,7 +459,7 @@ class _AdminSignupState extends State<AdminSignup> {
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: OutlinedButton.icon(
-                                      icon: authService.isLoading
+                                      icon: authService.isLoadingGoogle
                                           ? const SizedBox(
                                         width: 20, height: 20,
                                         child: CircularProgressIndicator(
@@ -464,7 +471,7 @@ class _AdminSignupState extends State<AdminSignup> {
                                         width: 24,
                                       ),
                                       label: Text(
-                                        authService.isLoading
+                                        authService.isLoadingGoogle
                                             ? 'Creating account with Google...'
                                             : 'Sign Up with Google',
                                         style: const TextStyle(
@@ -472,24 +479,21 @@ class _AdminSignupState extends State<AdminSignup> {
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                      onPressed: authService.isLoading
+                                      onPressed: authService.isLoadingGoogle
                                           ? null
                                           : () async {
                                         try {
                                           // Show loading state
-                                          setState(() {});
-
+                                          // No setState needed; Provider handles loading UI
                                           // Trigger Google sign-in/signup for all platforms
                                           bool success = await authService
                                               .signInWithGoogle();
 
                                           if (mounted) {
                                             if (success) {
-                                              // Navigate directly to dashboard instead of showing success dialog
-                                              // No need to do anything as the AuthWrapper will automatically redirect
-                                              // when authService.isAuthenticated becomes true
+                                              // User will be redirected as soon as authenticated
                                               debugPrint(
-                                                  'Google Sign-Up successful - redirecting to dashboard');
+                                                  'Google Sign-Up successful - redirecting');
                                             } else
                                             if (authService.errorMessage !=
                                                 null) {
