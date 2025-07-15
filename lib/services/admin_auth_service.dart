@@ -401,6 +401,31 @@ class AdminAuthService extends ChangeNotifier {
         }
       }
 
+      // --------- DUPLICATE EMAIL CHECK FOR GOOGLE SIGN-UP ---------
+      if (user != null && user.email != null && user.email!.isNotEmpty) {
+        // Query Firestore if admin with this email already exists (any UID or provider)
+        try {
+          final querySnapshot = await _firestore
+              .collection('admins')
+              .where('email', isEqualTo: user.email)
+              .limit(1)
+              .get();
+          if (querySnapshot.docs.isNotEmpty) {
+            // If found, prevent registration and show error
+            _errorMessage = 'This email is already registered.';
+            // Immediately sign out the Google-authenticated user to prevent accidental login
+            await signOut();
+            _isLoadingGoogle = false;
+            _googleSignInInProgress = false;
+            notifyListeners();
+            return false;
+          }
+        } catch (e) {
+          // Fallback: If Firestore fails, allow sign up (could be adjusted for your security preference)
+        }
+      }
+      // --------- END DUPLICATE CHECK ---------
+
       if (user != null) {
         _createInstantSession(user);
         await _createAdminFromGoogleInBackground(user);
