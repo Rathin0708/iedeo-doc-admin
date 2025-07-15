@@ -15,7 +15,10 @@ class ReportsTab extends StatefulWidget {
   State<ReportsTab> createState() => _ReportsTabState();
 }
 
-class _ReportsTabState extends State<ReportsTab> {
+class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMixin {
+  // Override to keep the tab state alive when switching tabs
+  @override
+  bool get wantKeepAlive => true;
   String _selectedPeriod = 'This Week';
   String _selectedReportType = 'All Reports';
 
@@ -83,10 +86,14 @@ class _ReportsTabState extends State<ReportsTab> {
 
   // Call this to manually refresh data on request
   Future<void> _refreshPatientReport(AdminFirebaseService service) async {
+    if (!mounted) return;
+    
     setState(() {
       _patientReportLoaded = false;
     });
+    
     await service.fetchPatientReport();
+    
     if (mounted) {
       setState(() {
         _localPatientReport = List<Map<String, dynamic>>.from(
@@ -98,6 +105,7 @@ class _ReportsTabState extends State<ReportsTab> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     return Consumer<AdminFirebaseService>(
       builder: (context, firebaseService, child) {
         if (firebaseService.isLoading) {
@@ -187,8 +195,15 @@ class _ReportsTabState extends State<ReportsTab> {
                               ))
                               .toList(),
                           onChanged: (value) {
-                            setState(() {
-                              _selectedPeriod = value!;
+                            if (value == _selectedPeriod) return;
+                            
+                            // Use microtask to defer state update to next frame
+                            Future.microtask(() {
+                              if (mounted) {
+                                setState(() {
+                                  _selectedPeriod = value!;
+                                });
+                              }
                             });
                           },
                         ),
@@ -217,8 +232,15 @@ class _ReportsTabState extends State<ReportsTab> {
                               ))
                               .toList(),
                           onChanged: (value) {
-                            setState(() {
-                              _selectedReportType = value!;
+                            if (value == _selectedReportType) return;
+                            
+                            // Use microtask to defer state update to next frame
+                            Future.microtask(() {
+                              if (mounted) {
+                                setState(() {
+                                  _selectedReportType = value!;
+                                });
+                              }
                             });
                           },
                         ),
