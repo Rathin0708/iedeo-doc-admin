@@ -235,6 +235,34 @@ class AdminAuthService extends ChangeNotifier {
           .timeout(const Duration(seconds: 5));
 
       if (result.user != null) {
+        // ADMIN EMAIL FIRESTORE CHECK
+        final emailToCheck = result.user!.email;
+        try {
+          final querySnapshot = await _firestore
+              .collection('admins')
+              .where('email', isEqualTo: emailToCheck)
+              .limit(1)
+              .get();
+          if (querySnapshot.docs.isEmpty) {
+            // Not an admin
+            _errorMessage = 'Account not registered as admin.';
+
+            await signOut();
+            _isAuthenticated = false;
+            _isLoadingNormal = false;
+            notifyListeners();
+            return false;
+          }
+        } catch (e) {
+          _errorMessage = 'Unable to verify admin privileges. Try again.';
+          await signOut();
+          _isAuthenticated = false;
+          _isLoadingNormal = false;
+          notifyListeners();
+          return false;
+        }
+        // END ADMIN FIRESTORE CHECK
+
         // INSTANT session creation
         _createInstantSession(result.user!);
 
@@ -401,7 +429,7 @@ class AdminAuthService extends ChangeNotifier {
         }
       }
 
-      // --------- DUPLICATE EMAIL CHECK FOR GOOGLE SIGN-UP ---------
+      // ADMIN EMAIL FIRESTORE CHECK FOR GOOGLE SIGN-UP
       if (user != null && user.email != null && user.email!.isNotEmpty) {
         // Query Firestore if admin with this email already exists (any UID or provider)
         try {
@@ -410,10 +438,10 @@ class AdminAuthService extends ChangeNotifier {
               .where('email', isEqualTo: user.email)
               .limit(1)
               .get();
-          if (querySnapshot.docs.isNotEmpty) {
-            // If found, prevent registration and show error
-            _errorMessage = 'This email is already registered.';
-            // Immediately sign out the Google-authenticated user to prevent accidental login
+          if (querySnapshot.docs.isEmpty) {
+            // Not present in admins: do not allow login
+            _errorMessage =
+            'Invalid email or unauthorized: please contact admin.';
             await signOut();
             _isLoadingGoogle = false;
             _googleSignInInProgress = false;
@@ -421,10 +449,16 @@ class AdminAuthService extends ChangeNotifier {
             return false;
           }
         } catch (e) {
-          // Fallback: If Firestore fails, allow sign up (could be adjusted for your security preference)
+          // Fallback: Block login if we could not verify Firestore
+          _errorMessage = 'Unable to verify admin privileges. Try again.';
+          await signOut();
+          _isLoadingGoogle = false;
+          _googleSignInInProgress = false;
+          notifyListeners();
+          return false;
         }
       }
-      // --------- END DUPLICATE CHECK ---------
+      // END ADMIN FIRESTORE CHECK
 
       if (user != null) {
         _createInstantSession(user);
