@@ -579,11 +579,18 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _buildStatCard(
-            'Revenue ($_selectedPeriod)',
-            '₹${firebaseService.dashboardStats['estimatedRevenue'] ?? 0}',
-            Icons.attach_money,
-            [Colors.purple[400]!, Colors.purple[600]!],
+          child: StreamBuilder<Map<String, dynamic>>(
+            stream: firebaseService.dashboardStatsStream,
+            initialData: firebaseService.dashboardStats,
+            builder: (context, snapshot) {
+              final stats = snapshot.data ?? {};
+              return _buildStatCard(
+                'Revenue ($_selectedPeriod)',
+                '₹${stats['estimatedRevenue'] ?? 0}',
+                Icons.attach_money,
+                [Colors.purple[400]!, Colors.purple[600]!],
+              );
+            },
           ),
         ),
       ],
