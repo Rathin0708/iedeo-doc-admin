@@ -39,8 +39,8 @@ class AdminPatient {
 
   factory AdminPatient.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    // Always pick up patientName, fallback to name, never blank or null
-    final String resolvedName = (data['patientName'] ?? data['name'] ?? '')
+    // Always pick up name, fallback to patientName, never blank or null
+    final String resolvedName = (data['name'] ?? data['patientName'] ?? '')
         .toString()
         .trim();
     return AdminPatient(

@@ -96,7 +96,7 @@ class AdminFirebaseService extends ChangeNotifier {
 
       // STEP 2: Create referral document in Firestore
       final patientData = {
-        'patientName': patientName,
+        'name': patientName,
         'age': age,
         'contactInfo': contactInfo,
         'address': address,
