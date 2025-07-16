@@ -367,7 +367,15 @@ class AdminFirebaseService extends ChangeNotifier {
       for (var doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final doctorName = data['doctorName'] ?? 'Unknown Doctor';
-        final status = data['currentStatus'] ?? 'Pending';
+        
+        // Get status from either 'status' or 'currentStatus' field
+        String status = 'Pending';
+        if (data.containsKey('status')) {
+          status = data['status'].toString();
+        } else if (data.containsKey('currentStatus')) {
+          status = data['currentStatus'].toString();
+        }
+        
         final createdAtRaw = data['createdAt'];
         DateTime? createdAt;
         if (createdAtRaw != null) {
@@ -396,8 +404,13 @@ class AdminFirebaseService extends ChangeNotifier {
           doctorFirstReferral[doctorName] = createdAt;
         }
 
-        if (status.toLowerCase().contains('completed')) {
+        // More flexible check for completed status
+        if (status.toLowerCase() == 'completed' || 
+            status.toLowerCase().contains('complet') || 
+            status.toLowerCase() == 'done' || 
+            status.toLowerCase() == 'finished') {
           doctorStats[doctorName]!['completed']++;
+          print('Admin service: Found completed referral for doctor: $doctorName, Status: $status');
         } else if (status.toLowerCase().contains('ongoing') ||
             status.toLowerCase().contains('progress')) {
           doctorStats[doctorName]!['ongoing']++;

@@ -742,7 +742,13 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         // Check if the referral was created today
         if (createdAt.isAfter(todayStart) && createdAt.isBefore(todayEnd)) {
           final doctorName = referral['doctorName']?.toString() ?? 'Unknown';
-          final status = referral['currentStatus']?.toString() ?? '';
+          // Get status from either 'status' or 'currentStatus' field
+          String status = '';
+          if (referral.containsKey('status')) {
+            status = referral['status'].toString();
+          } else if (referral.containsKey('currentStatus')) {
+            status = referral['currentStatus'].toString();
+          }
           
           // Initialize doctor entry if not exists
           if (!todayReferralsByDoctor.containsKey(doctorName)) {
@@ -759,7 +765,11 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
           todayReferralsByDoctor[doctorName]!['totalReferrals'] = 
               (todayReferralsByDoctor[doctorName]!['totalReferrals'] as int) + 1;
               
-          if (status.toLowerCase().contains('completed')) {
+          // Check for completed status in a more flexible way
+          if (status.toLowerCase() == 'completed' || 
+              status.toLowerCase().contains('complet') || 
+              status.toLowerCase() == 'done') {
+            print('Found completed referral for doctor: $doctorName, Status: $status');
             todayReferralsByDoctor[doctorName]!['completed'] = 
                 (todayReferralsByDoctor[doctorName]!['completed'] as int) + 1;
           } else {
