@@ -593,7 +593,7 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                 Icon(Icons.person, color: Colors.teal[700]),
                 const SizedBox(width: 8),
                 Text(
-                  'Patient Report (${_selectedPeriod})',
+                  'Patient Report ($_selectedPeriod)',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -651,9 +651,10 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                     DataColumn(label: Text('Doctor')),
                     DataColumn(label: Text('Last Visit')),
                   ],
+                  
                   rows: patientsFiltered.map((patient) {
                     return DataRow(cells: [
-                      DataCell(Text(patient['name'] ?? 'Unknown')),
+                      DataCell(Text(getDisplayPatientName(patient))),
                       DataCell(Text(patient['therapist'] ?? 'Unknown')),
                       DataCell(Text(patient['doctor'] ?? 'Unknown')),
                       DataCell(Text(patient['lastVisit'] ?? '-')),
@@ -665,6 +666,23 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         ),
       ),
     );
+  }
+
+  // Utility: Get real patient display name from a map (handles empty/whitespaces)
+  String getDisplayPatientName(Map<String, dynamic> patientName) {
+    String? s = patientName['patientName'];
+    if (s != null && s
+        .trim()
+        .isNotEmpty) {
+      return s.trim();
+    }
+    s = patientName['name'];
+    if (s != null && s
+        .trim()
+        .isNotEmpty) {
+      return s.trim();
+    }
+    return 'Unknown';
   }
 
   List<List<String>> buildExportRows(AdminFirebaseService firebaseService,
@@ -774,7 +792,8 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
           continue;
         }
         rows.add([
-          row['name'] ?? '',
+          getDisplayPatientName(row),
+          // Use patientName if present, else name, else blank. Ensures correct export display even if Firestore/old data mixes key names.
           row['therapist'] ?? '',
           row['doctor'] ?? '',
           row['lastVisit'] ?? '',
@@ -934,7 +953,8 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
             continue;
           }
           rows.add([
-            row['name'] ?? '',
+            getDisplayPatientName(row),
+            // Use patientName if present, else name, else blank. Ensures correct export display even if Firestore/old data mixes key names.
             row['therapist'] ?? '',
             row['doctor'] ?? '',
             row['lastVisit'] ?? '',

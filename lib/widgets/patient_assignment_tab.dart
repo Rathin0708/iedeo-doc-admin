@@ -1283,10 +1283,10 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
                   Text('Assigned: ', style: TextStyle(
                       fontWeight: FontWeight.w600, color: Colors.green)),
                   if (assignedDiffHours < 2) ...[
-                    Text(_formatDateDMY(dateAssigned!), style: TextStyle(
+                    Text(_formatDateDMY(dateAssigned), style: TextStyle(
                         fontSize: 12, color: Colors.green[800])),
                     const SizedBox(width: 6),
-                    Text('(${timeAgoAssigned} ago)', style: TextStyle(
+                    Text('($timeAgoAssigned ago)', style: TextStyle(
                         fontSize: 11, color: Colors.grey[600])),
                   ] else
                     ...[

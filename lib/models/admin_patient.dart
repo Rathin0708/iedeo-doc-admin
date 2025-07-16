@@ -17,7 +17,6 @@ class AdminPatient {
   final DateTime createdAt;
   final DateTime? assignedAt;
   final List<String> prescriptionImages;
-  final String? name;
 
   AdminPatient({
     required this.id,
@@ -36,15 +35,17 @@ class AdminPatient {
     required this.createdAt,
     this.assignedAt,
     this.prescriptionImages = const [],
-    this.name,
   });
 
   factory AdminPatient.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    // Always pick up patientName, fallback to name, never blank or null
+    final String resolvedName = (data['patientName'] ?? data['name'] ?? '')
+        .toString()
+        .trim();
     return AdminPatient(
       id: doc.id,
-      name: data['name'] ?? '',
-      patientName: data['patientName'] ?? '',
+      patientName: resolvedName.isNotEmpty ? resolvedName : 'Unknown',
       age: data['age'] ?? 0,
       address: data['address'] ?? '',
       problem: data['problem'] ?? '',

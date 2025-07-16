@@ -160,7 +160,7 @@ class _TherapistAssignedPatientsScreenState
                         builder: (_) =>
                             PatientVisitLogsScreen(
                                 patientId: patient.id,
-                                patientName: patient.name, name: '',),
+                                patientName: patient.patientName, name: '',),
                       ),
                     );
                   },
@@ -171,7 +171,7 @@ class _TherapistAssignedPatientsScreenState
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Patient Name: ${patient.name}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              Text('Patient Name: ${patient.patientName}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                               Text('Patient ID: ${patient.id}'),
                               Text('Age: ${patient.age}'),
                               Text('Address: ${patient.address}'),

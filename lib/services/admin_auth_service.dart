@@ -60,8 +60,8 @@ class AdminAuthService extends ChangeNotifier {
   static final bool _skipFirebaseQueries = false;
 
   // Prevents repeated/overlapping Google logins
-  bool _googleSignInInProgress = false;
-  bool _lastGoogleSignInCancelled = false;
+  final bool _googleSignInInProgress = false;
+  final bool _lastGoogleSignInCancelled = false;
 
   bool get isGoogleSignInInProgress => _googleSignInInProgress;
 
@@ -501,7 +501,7 @@ class AdminAuthService extends ChangeNotifier {
       return adminsQuery.docs.isNotEmpty;
     } catch (e) {
       if (kDebugMode) {
-        print('🔄 Admin existence check failed: $e');
+        print(' Admin existence check failed: $e');
       }
       return false;
     }
