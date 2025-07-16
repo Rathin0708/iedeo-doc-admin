@@ -1229,56 +1229,6 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
           '${row['pending'] ?? 0}',
         ]);
       }
-    } else if (reportType == 'Visits by Therapist') {
-      rows.add(
-          ['Therapist Name', 'Total Visits', 'Completion Rate']);
-      final allVisits = firebaseService.reportData['allVisits'] as List<
-          Map<String, dynamic>>? ?? [];
-      final allTherapistStats = firebaseService
-          .reportData['visitsByTherapist'] as List<Map<String, dynamic>>? ?? [];
-      final period = _selectedPeriod;
-      final range = _getPeriodRange(period);
-      Map<String, Map<String, dynamic>> periodTherapists = {};
-      for (final visit in allVisits) {
-        final therapistId = visit['therapistId'];
-        final visitDate = _parseVisitDate(visit['visitDate']);
-        if (therapistId == null || visitDate == null) continue;
-        if (!visitDate.isBefore(range[0]) && visitDate.isBefore(range[1])) {
-          periodTherapists.putIfAbsent(therapistId, () {
-            final mainRow = allTherapistStats.firstWhere(
-                    (row) => row['therapistId'] == therapistId,
-                orElse: () => {});
-            return {
-              'therapistName': mainRow['therapistName'] ?? 'Unknown',
-              'therapistId': therapistId,
-              'totalVisits': 0,
-              'completionRate': mainRow['completionRate'] ?? 0,
-              'thisWeekVisits': mainRow['thisWeekVisits'] ?? 0,
-            };
-          });
-          periodTherapists[therapistId]!['totalVisits']++;
-        }
-      }
-      final visitsFiltered = periodTherapists.values.toList();
-      for (final row in visitsFiltered) {
-        rows.add([
-          row['therapistName'] ?? '',
-          '${row['totalVisits'] ?? 0}',
-          '${row['completionRate'] ?? 0}%'
-        ]);
-      }
-    } else if (reportType == 'Pending Follow-ups') {
-      rows.add(['Patient Name', 'Therapist', 'Last Visit', 'Due Date']);
-      final data = firebaseService.reportData['pendingFollowups'] as List<
-          Map<String, dynamic>>? ?? [];
-      for (final row in data) {
-        rows.add([
-          row['patientName'] ?? '',
-          row['therapistName'] ?? '',
-          row['lastVisitDate'] ?? '',
-          row['dueDate'] ?? '',
-        ]);
-      }
     } else if (reportType == 'Revenue Report') {
       // Export must match filter!
       final List<Map<String, dynamic>> allVisits = firebaseService
@@ -1398,53 +1348,7 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         }
         rows.add(List<String>.filled(4, ''));
       }
-      if (dataV.isNotEmpty) {
-        rows.add(
-            ['Therapist Name', 'Total Visits', 'Completion Rate']);
-        final period = _selectedPeriod;
-        final range = _getPeriodRange(period);
-        Map<String, Map<String, dynamic>> periodTherapists = {};
-        for (final visit in allVisits) {
-          final therapistId = visit['therapistId'];
-          final visitDate = _parseVisitDate(visit['visitDate']);
-          if (therapistId == null || visitDate == null) continue;
-          if (!visitDate.isBefore(range[0]) && visitDate.isBefore(range[1])) {
-            periodTherapists.putIfAbsent(therapistId, () {
-              final mainRow = allTherapistStats.firstWhere(
-                      (row) => row['therapistId'] == therapistId,
-                  orElse: () => {});
-              return {
-                'therapistName': mainRow['therapistName'] ?? 'Unknown',
-                'therapistId': therapistId,
-                'totalVisits': 0,
-                'completionRate': mainRow['completionRate'] ?? 0,
-              };
-            });
-            periodTherapists[therapistId]!['totalVisits']++;
-          }
-        }
-        final visitsFiltered = periodTherapists.values.toList();
-        for (final row in visitsFiltered) {
-          rows.add([
-            row['therapistName'] ?? '',
-            '${row['totalVisits'] ?? 0}',
-            '${row['completionRate'] ?? 0}%',
-          ]);
-        }
-        rows.add(List<String>.filled(3, ''));
-      }
-      if (dataF.isNotEmpty) {
-        rows.add(['Patient Name', 'Therapist', 'Last Visit', 'Due Date']);
-        for (final row in dataF) {
-          rows.add([
-            row['patientName'] ?? '',
-            row['therapistName'] ?? '',
-            row['lastVisitDate'] ?? '',
-            row['dueDate'] ?? '',
-          ]);
-        }
-        rows.add(List<String>.filled(4, ''));
-      }
+      if (dataV.isNotEmpty) 
       if (revenue.isNotEmpty) {
         rows.add(['Metric', 'This Week', 'This Month']);
         rows.add([
