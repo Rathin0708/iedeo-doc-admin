@@ -150,6 +150,11 @@ class AdminAuthService extends ChangeNotifier {
     _adminName = null;
     _adminEmail = null;
     _adminRole = null;
+    _errorMessage = null;
+    _isLoadingNormal = false;
+    _isLoadingGoogle = false;
+    
+    // Make sure to notify listeners to update UI
     notifyListeners();
   }
 
@@ -460,17 +465,31 @@ class AdminAuthService extends ChangeNotifier {
 
   Future<void> signOut() async {
     try {
+      // Clear cached admin data first
+      _cachedAdmin = null;
+      _lastCacheTime = null;
+      
+      // Reset authentication state before actual signout to ensure UI updates immediately
+      _resetAuthState();
+      
+      // Perform actual sign out operations
       await Future.wait([
         _auth.signOut(),
         if (_isGoogleSignInAvailable && _googleSignIn != null)
           _googleSignIn!.signOut(),
       ]).timeout(const Duration(seconds: 3));
-
-      _resetAuthState();
+      
+      // Double-check authentication state is properly reset
+      _isAuthenticated = false;
+      notifyListeners();
+      
       print('✅ Admin signed out successfully');
     } catch (e) {
       print('❌ Sign out error: $e');
-      _resetAuthState(); // Force logout
+      // Force logout in case of error
+      _isAuthenticated = false;
+      _resetAuthState();
+      notifyListeners();
     }
   }
 

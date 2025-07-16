@@ -196,6 +196,12 @@ class _AdminDashboardState extends State<AdminDashboard>
                                 onSelected: (value) async {
                                   if (value == 'logout') {
                                     await authService.signOut();
+                                    
+                                    // Force navigation to login screen
+                                    Navigator.of(context).pushNamedAndRemoveUntil(
+                                      '/',
+                                      (route) => false, // Remove all previous routes
+                                    );
                                   }
                                 },
                                 itemBuilder: (context) =>
