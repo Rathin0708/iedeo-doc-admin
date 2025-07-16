@@ -454,6 +454,10 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
     );
   }
 
+  // Track how many doctors to show in the referrals report
+  int _doctorDisplayLimit = 10;
+  bool _showingAllDoctors = false;
+  
   Widget _buildReferralsByDoctorReport(AdminFirebaseService firebaseService) {
     final allReferrals = firebaseService
         .reportData['referralsByDoctor'] as List<Map<String, dynamic>>? ?? [];
@@ -468,6 +472,13 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
       final range = _getPeriodRange(_selectedPeriod);
       return !createdAt.isBefore(range[0]) && createdAt.isBefore(range[1]);
     }).toList();
+    
+    // Determine if we need to show the View More button
+    final hasMoreDoctors = referralsFiltered.length > _doctorDisplayLimit;
+    // Get the doctors to display based on the current limit
+    final doctorsToDisplay = hasMoreDoctors && !_showingAllDoctors
+        ? referralsFiltered.take(_doctorDisplayLimit).toList()
+        : referralsFiltered;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 20),
@@ -502,24 +513,44 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                 ),
               )
             else
-              SizedBox(
-                width: double.infinity,
-                child: DataTable(
-                  columns: const [
-                    DataColumn(label: Text('Doctor Name')),
-                    DataColumn(label: Text('Total Referrals')),
-                    DataColumn(label: Text('Completed')),
-                    DataColumn(label: Text('Pending')),
-                  ],
-                  rows: referralsFiltered.map((doctor) {
-                    return DataRow(cells: [
-                      DataCell(Text(doctor['doctorName'] ?? 'Unknown')),
-                      DataCell(Text('${doctor['totalReferrals'] ?? 0}')),
-                      DataCell(Text('${doctor['completed'] ?? 0}')),
-                      DataCell(Text('${doctor['pending'] ?? 0}')),
-                    ]);
-                  }).toList(),
-                ),
+              Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: DataTable(
+                      columns: const [
+                        DataColumn(label: Text('Doctor Name')),
+                        DataColumn(label: Text('Total Referrals')),
+                        DataColumn(label: Text('Completed')),
+                        DataColumn(label: Text('Pending')),
+                      ],
+                      rows: doctorsToDisplay.map((doctor) {
+                        return DataRow(cells: [
+                          DataCell(Text(doctor['doctorName'] ?? 'Unknown')),
+                          DataCell(Text('${doctor['totalReferrals'] ?? 0}')),
+                          DataCell(Text('${doctor['completed'] ?? 0}')),
+                          DataCell(Text('${doctor['pending'] ?? 0}')),
+                        ]);
+                      }).toList(),
+                    ),
+                  ),
+                  // Show View More button if there are more doctors
+                  if (hasMoreDoctors)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _showingAllDoctors = !_showingAllDoctors;
+                          });
+                        },
+                        child: Text(
+                          _showingAllDoctors ? 'Show Less' : 'View More (${referralsFiltered.length - _doctorDisplayLimit} more)',
+                          style: TextStyle(color: Colors.blue[700]),
+                        ),
+                      ),
+                    ),
+                ],
               ),
           ],
         ),
