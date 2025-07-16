@@ -571,8 +571,8 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         const SizedBox(width: 12),
         Expanded(
           child: _buildStatCard(
-            'Completed Visits',
-            '${firebaseService.dashboardStats['completedVisits'] ?? 0}',
+            'Completed Referrals',
+            _getCompletedReferralsCount(firebaseService),
             Icons.check_circle,
             [Colors.green[400]!, Colors.green[600]!],
           ),
@@ -595,6 +595,64 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         ),
       ],
     );
+  }
+
+  String _getCompletedReferralsCount(AdminFirebaseService firebaseService) {
+    int completedCount = 0;
+    
+    // Get all referrals from the report data
+    List<dynamic> allReferrals = firebaseService.reportData['allReferrals'] ?? [];
+    
+    // Debug: Print all referrals and their status
+    print('Checking all referrals for completed status:');
+    for (var referral in allReferrals) {
+      String status = '';
+      if (referral.containsKey('status')) {
+        status = referral['status'].toString();
+      } else if (referral.containsKey('currentStatus')) {
+        status = referral['currentStatus'].toString();
+      }
+      print('Referral ID: ${referral['id']}, Status: $status');
+      
+      // Check for 'completed' in any case format
+      if (status.toLowerCase() == 'completed') {
+        completedCount++;
+        print('Found completed referral: ${referral['id']}');
+      }
+    }
+    
+    // If still no completed referrals found, check for variations
+    if (completedCount == 0) {
+      for (var referral in allReferrals) {
+        String status = '';
+        if (referral.containsKey('status')) {
+          status = referral['status'].toString();
+        } else if (referral.containsKey('currentStatus')) {
+          status = referral['currentStatus'].toString();
+        }
+        
+        if (status.toLowerCase().contains('complet')) {
+          completedCount++;
+          print('Found completed referral (partial match): ${referral['id']}');
+        }
+      }
+    }
+    
+    // Direct count from Firebase
+    if (completedCount == 0) {
+      // Use the doctor stats as a fallback
+      List<dynamic> referralsByDoctor = firebaseService.reportData['referralsByDoctor'] ?? [];
+      for (var doctorStats in referralsByDoctor) {
+        if (doctorStats.containsKey('completed')) {
+          int docCompleted = (doctorStats['completed'] ?? 0) as int;
+          completedCount += docCompleted;
+          print('Adding ${docCompleted} completed referrals from doctor: ${doctorStats['doctorName']}');
+        }
+      }
+    }
+    
+    print('Total completed referrals count: $completedCount');
+    return completedCount.toString();
   }
 
   Widget _buildStatCard(String title, String value, IconData icon,
