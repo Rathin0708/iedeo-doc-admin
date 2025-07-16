@@ -962,19 +962,34 @@ class AdminFirebaseService extends ChangeNotifier {
       QuerySnapshot snapshot = await _firestore.collection('referrals').get();
       _reportData['patientReport'] = snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
+        
+        // Get patient name - use 'name' field directly as seen in Firebase
+        String patientName = '';
+        if (data.containsKey('name') && data['name'] != null && data['name'].toString().trim().isNotEmpty) {
+          patientName = data['name'].toString().trim();
+        } else if (data.containsKey('patientName') && data['patientName'] != null && data['patientName'].toString().trim().isNotEmpty) {
+          patientName = data['patientName'].toString().trim();
+        }
+        
         return {
-          'name': data['patientName'] ?? '',
+          'patientName': patientName,
           'therapist': data['therapistName'] ?? '',
           'doctor': data['doctorName'] ?? '',
           'lastVisit': data['lastVisitDate'] != null
               ? (data['lastVisitDate'] is Timestamp
-              ? (data['lastVisitDate'] as Timestamp).toDate().toString().split(
-              ' ')[0]
+              ? (data['lastVisitDate'] as Timestamp).toDate().toString().split(' ')[0]
               : data['lastVisitDate'].toString().split(' ')[0])
               : '',
         };
       }).toList();
+      
+      // Debug output to check patient data
+      print('Patient report data count: ${_reportData['patientReport']?.length}');
+      if (_reportData['patientReport']?.isNotEmpty == true) {
+        print('First patient data: ${_reportData['patientReport']?[0]}');
+      }
     } catch (e) {
+      print('Error fetching patient report: $e');
       _reportData['patientReport'] = [];
     } finally {
       _setLoading(false);

@@ -99,6 +99,13 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         _localPatientReport = List<Map<String, dynamic>>.from(
             service.reportData['patientReport'] ?? []);
         _patientReportLoaded = true;
+        
+        // Debug output to check patient data structure
+        if (_localPatientReport.isNotEmpty) {
+          print('First patient in _localPatientReport: ${_localPatientReport.first}');
+        } else {
+          print('No patients in _localPatientReport');
+        }
       });
     }
   }
@@ -651,7 +658,6 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                     DataColumn(label: Text('Doctor')),
                     DataColumn(label: Text('Last Visit')),
                   ],
-                  
                   rows: patientsFiltered.map((patient) {
                     return DataRow(cells: [
                       DataCell(Text(getDisplayPatientName(patient))),
@@ -668,21 +674,18 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
     );
   }
 
-  // Utility: Get real patient display name from a map (handles empty/whitespaces)
-  String getDisplayPatientName(Map<String, dynamic> patientName) {
-    String? s = patientName['patientName'];
-    if (s != null && s
-        .trim()
-        .isNotEmpty) {
-      return s.trim();
+  // Utility: Get real patient display name from a map (tries 'patientName', then 'name', then 'fullName', then fallback to 'Unknown')
+  String getDisplayPatientName(Map<String, dynamic> patient) {
+    // Try all possible keys in priority order - patientName first as it's the primary key in the Firebase data
+    final String n = (patient['patientName'] ?? patient['name'] ??
+        patient['fullName'] ?? '').toString().trim();
+    
+    // Debug the patient data if name is empty
+    if (n.isEmpty) {
+      print('Patient data with missing name: $patient');
     }
-    s = patientName['name'];
-    if (s != null && s
-        .trim()
-        .isNotEmpty) {
-      return s.trim();
-    }
-    return 'Unknown';
+    
+    return n.isNotEmpty ? n : 'Unknown';
   }
 
   List<List<String>> buildExportRows(AdminFirebaseService firebaseService,
