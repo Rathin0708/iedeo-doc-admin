@@ -1034,44 +1034,58 @@ class AdminFirebaseService extends ChangeNotifier {
       // Now build the patient report by combining referrals and visits data
       List<Map<String, dynamic>> patientReport = [];
       
-      // For each visit, find the corresponding patient details
-      latestVisits.forEach((patientId, visitInfo) {
-        // Find patient details - first try direct match with document ID
-        Map<String, dynamic>? details = patientDetails[patientId];
+      // First, add all patients from referrals collection
+      // This ensures all patients are included, even those without visits
+      for (var entry in patientDetails.entries) {
+        final referralId = entry.key;
+        final details = entry.value;
+        final referralData = referralsSnapshot.docs
+            .firstWhere((doc) => doc.id == referralId)
+            .data() as Map<String, dynamic>;
         
-        // If no match found, try to find a referral with matching patientId field
-        if (details == null) {
-          for (var entry in patientDetails.entries) {
-            final referralData = referralsSnapshot.docs
-                .firstWhere((doc) => doc.id == entry.key)
-                .data() as Map<String, dynamic>;
-                
-            if (referralData.containsKey('patientId') && 
-                referralData['patientId'] != null && 
-                referralData['patientId'].toString() == patientId) {
-              details = entry.value;
-              break;
-            }
-          }
+        // Get patient ID from referral
+        String patientId = referralId; // Default to document ID
+        if (referralData.containsKey('patientId') && 
+            referralData['patientId'] != null && 
+            referralData['patientId'].toString().trim().isNotEmpty) {
+          patientId = referralData['patientId'].toString().trim();
         }
         
-        // If still no match, create a minimal record
-        details ??= {
-          'name': 'Unknown',
-          'therapistName': '',
-          'doctorName': '',
-        };
+        // Check if this patient has a visit
+        String lastVisitDate = '';
+        if (latestVisits.containsKey(patientId)) {
+          lastVisitDate = latestVisits[patientId]['dateStr'];
+        }
         
         // Add to the patient report
         patientReport.add({
           'patientName': details['name'],
           'therapist': details['therapistName'],
           'doctor': details['doctorName'],
-          'lastVisit': visitInfo['dateStr'],
+          'lastVisit': lastVisitDate,
           'patientId': patientId,
         });
         
-        print('Added patient to report: ${details['name']} (ID: $patientId), Last visit: ${visitInfo['dateStr']}');
+        print('Added patient from referrals: ${details['name']} (ID: $patientId), Last visit: $lastVisitDate');
+      }
+      
+      // Then add any patients from visits that weren't in referrals
+      latestVisits.forEach((patientId, visitInfo) {
+        // Check if this patient was already added from referrals
+        bool patientExists = patientReport.any((p) => p['patientId'] == patientId);
+        
+        if (!patientExists) {
+          // Create a minimal record for patients that only exist in visits
+          patientReport.add({
+            'patientName': 'Unknown',
+            'therapist': '',
+            'doctor': '',
+            'lastVisit': visitInfo['dateStr'],
+            'patientId': patientId,
+          });
+          
+          print('Added patient from visits only: Unknown (ID: $patientId), Last visit: ${visitInfo['dateStr']}');
+        }
       });
       
       // Set the report data
