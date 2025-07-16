@@ -20,12 +20,30 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
   @override
   bool get wantKeepAlive => true;
   String _selectedPeriod = 'This Week';
+  // Custom date range variables
+  DateTime? _customStartDate;
+  DateTime? _customEndDate;
   String _selectedReportType = 'All Reports';
+  
+  // Additional filter options
+  String? _selectedDoctor;
+  String? _selectedTherapist;
+  String? _selectedStatus;
+  
+  // Lists for filter dropdowns
+  List<String> _doctorsList = ['All Doctors'];
+  List<String> _therapistsList = ['All Therapists'];
+  List<String> _statusList = ['All Status', 'Completed', 'Pending'];
 
   // Hold patient report data locally to avoid flicker or clearing on rebuild
   List<Map<String, dynamic>> _localPatientReport = [];
   bool _patientReportLoaded = false;
 
+  // Format date for display
+  String _formatDateForDisplay(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+  
   // Helper: Parse a date value from Firestore or string
   DateTime? _parseVisitDate(dynamic d) {
     // Handle null, empty strings, or 'Not visited yet' text
@@ -95,8 +113,15 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
       final lastMonthStart = DateTime(year, lastMonth, 1);
       final lastMonthEnd = DateTime(now.year, now.month, 1);
       return [lastMonthStart, lastMonthEnd];
+    } else if (period == 'Custom Range' && _customStartDate != null && _customEndDate != null) {
+      // Use the selected custom date range
+      final customStart = DateTime(_customStartDate!.year, _customStartDate!.month, _customStartDate!.day);
+      // Add 1 day to end date to include the full end date (up to midnight)
+      final customEnd = DateTime(_customEndDate!.year, _customEndDate!.month, _customEndDate!.day)
+          .add(const Duration(days: 1));
+      return [customStart, customEnd];
     } else {
-      // Custom Range: fallback to 'This Week'
+      // Fallback to 'This Week' if custom range is not properly set
       final weekStart = todayStart.subtract(
           Duration(days: todayStart.weekday - 1));
       return [weekStart, todayStart.add(const Duration(days: 1))];
@@ -116,11 +141,47 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
           _localPatientReport = List<Map<String, dynamic>>.from(
               service.reportData['patientReport'] ?? []);
           _patientReportLoaded = true;
+          
+          // Extract unique doctors and therapists from the data
+          _loadFilterOptions();
         });
       }
     });
   }
 
+  // Load filter options from data
+  void _loadFilterOptions() {
+    // Extract unique doctors from patient report
+    Set<String> doctors = {'All Doctors'};
+    Set<String> therapists = {'All Therapists'};
+    
+    for (var patient in _localPatientReport) {
+      // Add doctor names
+      if (patient['doctor'] != null && patient['doctor'].toString().isNotEmpty) {
+        doctors.add(patient['doctor'].toString());
+      }
+      
+      // Add therapist names
+      if (patient['therapist'] != null && patient['therapist'].toString().isNotEmpty) {
+        therapists.add(patient['therapist'].toString());
+      }
+    }
+    
+    // Get data from referrals by doctor report
+    final adminService = Provider.of<AdminFirebaseService>(context, listen: false);
+    final referralsByDoctor = adminService.reportData['referralsByDoctor'] as List<Map<String, dynamic>>? ?? [];
+    
+    for (var doctor in referralsByDoctor) {
+      if (doctor['doctorName'] != null && doctor['doctorName'].toString().isNotEmpty) {
+        doctors.add(doctor['doctorName'].toString());
+      }
+    }
+    
+    // Update the lists
+    _doctorsList = doctors.toList()..sort();
+    _therapistsList = therapists.toList()..sort();
+  }
+  
   // Call this to manually refresh data on request
   Future<void> _refreshPatientReport(AdminFirebaseService service) async {
     if (!mounted) return;
@@ -136,6 +197,9 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         _localPatientReport = List<Map<String, dynamic>>.from(
             service.reportData['patientReport'] ?? []);
         _patientReportLoaded = true;
+        
+        // Update filter options
+        _loadFilterOptions();
         
         // Debug output to check patient data structure
         if (_localPatientReport.isNotEmpty) {
@@ -173,10 +237,12 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                   // Report Title and Period Selector
                   Row(
                     children: [
-                      Icon(Icons.bar_chart, color: Colors.blue[700], size: 24),
+                      Icon(Icons.calendar_today, color: Colors.teal[700]),
                       const SizedBox(width: 8),
                       Text(
-                        'Admin Reports',
+                        _selectedPeriod == 'Custom Range' && _customStartDate != null && _customEndDate != null
+                            ? 'Reports for Custom Range: ${_formatDateForDisplay(_customStartDate!)} - ${_formatDateForDisplay(_customEndDate!)}'
+                            : 'Reports for $_selectedPeriod',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -211,6 +277,90 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                   ),
                   const SizedBox(height: 12),
 
+                  // Additional filters row
+                  Row(
+                    children: [
+                      // Doctor filter
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          decoration: InputDecoration(
+                            labelText: 'Doctor',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                          ),
+                          value: _selectedDoctor ?? 'All Doctors',
+                          items: _doctorsList
+                              .map((doctor) => DropdownMenuItem(
+                                    value: doctor,
+                                    child: Text(doctor),
+                                  ))
+                              .toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedDoctor = value == 'All Doctors' ? null : value;
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Therapist filter
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          decoration: InputDecoration(
+                            labelText: 'Therapist',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                          ),
+                          value: _selectedTherapist ?? 'All Therapists',
+                          items: _therapistsList
+                              .map((therapist) => DropdownMenuItem(
+                                    value: therapist,
+                                    child: Text(therapist),
+                                  ))
+                              .toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedTherapist = value == 'All Therapists' ? null : value;
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Status filter
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          decoration: InputDecoration(
+                            labelText: 'Status',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                          ),
+                          value: _selectedStatus ?? 'All Status',
+                          items: _statusList
+                              .map((status) => DropdownMenuItem(
+                                    value: status,
+                                    child: Text(status),
+                                  ))
+                              .toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedStatus = value == 'All Status' ? null : value;
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
                   // Filter Row
                   Row(
                     children: [
@@ -238,8 +388,47 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                                 child: Text(period),
                               ))
                               .toList(),
-                          onChanged: (value) {
+                          onChanged: (value) async {
                             if (value == _selectedPeriod) return;
+                            
+                            // If Custom Range is selected, show date picker
+                            if (value == 'Custom Range') {
+                              // Initialize with reasonable defaults if not set
+                              _customStartDate ??= DateTime.now().subtract(const Duration(days: 7));
+                              _customEndDate ??= DateTime.now();
+                              
+                              // Show date range picker
+                              final picked = await showDateRangePicker(
+                                context: context,
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime.now(),
+                                initialDateRange: DateTimeRange(
+                                  start: _customStartDate!,
+                                  end: _customEndDate!,
+                                ),
+                                builder: (context, child) {
+                                  return Theme(
+                                    data: Theme.of(context).copyWith(
+                                      colorScheme: ColorScheme.light(
+                                        primary: Colors.teal[700]!, // Header background
+                                        onPrimary: Colors.white, // Header text
+                                        onSurface: Colors.black, // Calendar text
+                                      ),
+                                    ),
+                                    child: child!,
+                                  );
+                                },
+                              );
+                              
+                              // If user cancels, revert to previous selection
+                              if (picked == null) {
+                                return;
+                              }
+                              
+                              // Update the custom date range
+                              _customStartDate = picked.start;
+                              _customEndDate = picked.end;
+                            }
                             
                             // Use microtask to defer state update to next frame
                             Future.microtask(() {
@@ -463,14 +652,35 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         .reportData['referralsByDoctor'] as List<Map<String, dynamic>>? ?? [];
 
     // Filter referrals by period using period range
-    final List<Map<String, dynamic>> referralsFiltered = allReferrals.where((
-        row) {
+    final dateFiltered = allReferrals.where((row) {
       // Can't filter by individual visit date: needs visit/createdAt field
       // Here, we try to use the 'createdAt' field in each referral by doctor row
       final createdAt = _parseVisitDate(row['createdAt']);
       if (createdAt == null) return true; // Fallback: if missing, include
       final range = _getPeriodRange(_selectedPeriod);
       return !createdAt.isBefore(range[0]) && createdAt.isBefore(range[1]);
+    }).toList();
+    
+    // Apply additional filters
+    final referralsFiltered = dateFiltered.where((doctor) {
+      // Filter by doctor if selected
+      if (_selectedDoctor != null) {
+        final doctorName = doctor['doctorName']?.toString() ?? '';
+        if (doctorName.isEmpty || doctorName != _selectedDoctor) {
+          return false;
+        }
+      }
+      
+      // Filter by status if selected
+      if (_selectedStatus != null) {
+        if (_selectedStatus == 'Completed' && (doctor['completed'] == null || doctor['completed'] == 0)) {
+          return false;
+        } else if (_selectedStatus == 'Pending' && (doctor['pending'] == null || doctor['pending'] == 0)) {
+          return false;
+        }
+      }
+      
+      return true;
     }).toList();
     
     // Determine if we need to show the View More button
@@ -651,12 +861,46 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
   bool _showingAllPatients = false;
   
   Widget _buildPatientReport(AdminFirebaseService firebaseService) {
-    // Patient report comes from _localPatientReport, but add filter based on 'lastVisit' date string
-    final patientsFiltered = _localPatientReport.where((patient) {
+    // First filter by date period
+    final dateFiltered = _localPatientReport.where((patient) {
       final lastVisit = _parseVisitDate(patient['lastVisit']);
       if (lastVisit == null) return true; // Fallback
       final range = _getPeriodRange(_selectedPeriod);
       return !lastVisit.isBefore(range[0]) && lastVisit.isBefore(range[1]);
+    }).toList();
+    
+    // Then apply additional filters
+    final patientsFiltered = dateFiltered.where((patient) {
+      // Filter by doctor if selected
+      if (_selectedDoctor != null) {
+        final doctorName = patient['doctor']?.toString() ?? '';
+        if (doctorName.isEmpty || doctorName != _selectedDoctor) {
+          return false;
+        }
+      }
+      
+      // Filter by therapist if selected
+      if (_selectedTherapist != null) {
+        final therapistName = patient['therapist']?.toString() ?? '';
+        if (therapistName.isEmpty || therapistName != _selectedTherapist) {
+          return false;
+        }
+      }
+      
+      // Filter by status if selected
+      if (_selectedStatus != null) {
+        final lastVisit = patient['lastVisit']?.toString() ?? '';
+        
+        if (_selectedStatus == 'Completed') {
+          // Consider a patient with a visit as 'Completed'
+          return lastVisit != 'Not visited yet';
+        } else if (_selectedStatus == 'Pending') {
+          // Consider a patient without a visit as 'Pending'
+          return lastVisit == 'Not visited yet';
+        }
+      }
+      
+      return true;
     }).toList();
     
     // Determine if we need to show the View More button
