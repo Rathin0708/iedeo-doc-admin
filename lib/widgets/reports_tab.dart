@@ -30,12 +30,40 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
   DateTime? _parseVisitDate(dynamic d) {
     if (d == null) return null;
     if (d is DateTime) return d;
+    
+    // Handle Timestamp objects from Firestore
     try {
       return d.toDate();
     } catch (_) {}
+    
+    // Handle ISO date strings
     try {
       return DateTime.parse(d.toString());
     } catch (_) {}
+    
+    // Handle date strings in format YYYY-MM-DD
+    try {
+      final parts = d.toString().split('-');
+      if (parts.length == 3) {
+        final year = int.parse(parts[0]);
+        final month = int.parse(parts[1]);
+        final day = int.parse(parts[2]);
+        return DateTime(year, month, day);
+      }
+    } catch (_) {}
+    
+    // Handle date strings in format DD/MM/YYYY
+    try {
+      final parts = d.toString().split('/');
+      if (parts.length == 3) {
+        final day = int.parse(parts[0]);
+        final month = int.parse(parts[1]);
+        final year = int.parse(parts[2]);
+        return DateTime(year, month, day);
+      }
+    } catch (_) {}
+    
+    print('Failed to parse date: $d');
     return null;
   }
 
