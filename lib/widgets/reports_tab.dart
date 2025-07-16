@@ -615,6 +615,10 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
     );
   }
 
+  // Track how many patients to show in the report
+  int _patientDisplayLimit = 10;
+  bool _showingAllPatients = false;
+  
   Widget _buildPatientReport(AdminFirebaseService firebaseService) {
     // Patient report comes from _localPatientReport, but add filter based on 'lastVisit' date string
     final patientsFiltered = _localPatientReport.where((patient) {
@@ -623,6 +627,13 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
       final range = _getPeriodRange(_selectedPeriod);
       return !lastVisit.isBefore(range[0]) && lastVisit.isBefore(range[1]);
     }).toList();
+    
+    // Determine if we need to show the View More button
+    final hasMorePatients = patientsFiltered.length > _patientDisplayLimit;
+    // Get the patients to display based on the current limit
+    final patientsToDisplay = hasMorePatients && !_showingAllPatients
+        ? patientsFiltered.take(_patientDisplayLimit).toList()
+        : patientsFiltered;
     // ... rest of card code, substitute 'patients' with 'patientsFiltered' in DataTable
     bool debugMode = true; // Set to true for extra debugging UI
     return Card(
@@ -685,25 +696,45 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
               )
             else
               if (_patientReportLoaded)
-              SizedBox(
-                width: double.infinity,
-                // DataTable renders the patient details
-                child: DataTable(
-                  columns: const [
-                    DataColumn(label: Text('Patient Name')),
-                    DataColumn(label: Text('Therapist')),
-                    DataColumn(label: Text('Doctor')),
-                    DataColumn(label: Text('Last Visit')),
-                  ],
-                  rows: patientsFiltered.map((patient) {
-                    return DataRow(cells: [
-                      DataCell(Text(getDisplayPatientName(patient))),
-                      DataCell(Text(patient['therapist'] ?? 'Unknown')),
-                      DataCell(Text(patient['doctor'] ?? 'Unknown')),
-                      DataCell(Text(patient['lastVisit'] ?? '-')),
-                    ]);
-                  }).toList(),
-                ),
+              Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    // DataTable renders the patient details
+                    child: DataTable(
+                      columns: const [
+                        DataColumn(label: Text('Patient Name')),
+                        DataColumn(label: Text('Therapist')),
+                        DataColumn(label: Text('Doctor')),
+                        DataColumn(label: Text('Last Visit')),
+                      ],
+                      rows: patientsToDisplay.map((patient) {
+                        return DataRow(cells: [
+                          DataCell(Text(getDisplayPatientName(patient))),
+                          DataCell(Text(patient['therapist'] ?? 'Unknown')),
+                          DataCell(Text(patient['doctor'] ?? 'Unknown')),
+                          DataCell(Text(patient['lastVisit'] ?? '-')),
+                        ]);
+                      }).toList(),
+                    ),
+                  ),
+                  // Show View More button if there are more patients
+                  if (hasMorePatients)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _showingAllPatients = !_showingAllPatients;
+                          });
+                        },
+                        child: Text(
+                          _showingAllPatients ? 'Show Less' : 'View More (${patientsFiltered.length - _patientDisplayLimit} more)',
+                          style: TextStyle(color: Colors.teal[700]),
+                        ),
+                      ),
+                    ),
+                ],
               ),
           ],
         ),
