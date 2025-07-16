@@ -648,21 +648,77 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
   bool _showingAllDoctors = false;
   
   Widget _buildReferralsByDoctorReport(AdminFirebaseService firebaseService) {
+    // Get all raw referrals data
+    final rawReferrals = firebaseService
+        .reportData['allReferrals'] as List<Map<String, dynamic>>? ?? [];
+    
+    // Get the standard referrals by doctor data
     final allReferrals = firebaseService
         .reportData['referralsByDoctor'] as List<Map<String, dynamic>>? ?? [];
-
-    // Filter referrals by period using period range
-    final dateFiltered = allReferrals.where((row) {
-      // Can't filter by individual visit date: needs visit/createdAt field
-      // Here, we try to use the 'createdAt' field in each referral by doctor row
-      final createdAt = _parseVisitDate(row['createdAt']);
-      if (createdAt == null) return true; // Fallback: if missing, include
-      final range = _getPeriodRange(_selectedPeriod);
-      return !createdAt.isBefore(range[0]) && createdAt.isBefore(range[1]);
-    }).toList();
+    
+    // Create a special list for today's referrals if needed
+    List<Map<String, dynamic>> referralsToUse;
+    
+    if (_selectedPeriod == 'Today') {
+      // For Today filter, we need to calculate today's referrals for each doctor
+      // Get today's date range
+      final now = DateTime.now();
+      final todayStart = DateTime(now.year, now.month, now.day);
+      final todayEnd = todayStart.add(const Duration(days: 1));
+      
+      // Group today's referrals by doctor
+      Map<String, Map<String, dynamic>> todayReferralsByDoctor = {};
+      
+      // Process each raw referral
+      for (var referral in rawReferrals) {
+        final createdAt = _parseVisitDate(referral['createdAt']);
+        if (createdAt == null) continue;
+        
+        // Check if the referral was created today
+        if (createdAt.isAfter(todayStart) && createdAt.isBefore(todayEnd)) {
+          final doctorName = referral['doctorName']?.toString() ?? 'Unknown';
+          final status = referral['currentStatus']?.toString() ?? '';
+          
+          // Initialize doctor entry if not exists
+          if (!todayReferralsByDoctor.containsKey(doctorName)) {
+            todayReferralsByDoctor[doctorName] = {
+              'doctorName': doctorName,
+              'totalReferrals': 0,
+              'completed': 0,
+              'pending': 0,
+              'createdAt': referral['createdAt'],
+            };
+          }
+          
+          // Increment counts
+          todayReferralsByDoctor[doctorName]!['totalReferrals'] = 
+              (todayReferralsByDoctor[doctorName]!['totalReferrals'] as int) + 1;
+              
+          if (status.toLowerCase().contains('completed')) {
+            todayReferralsByDoctor[doctorName]!['completed'] = 
+                (todayReferralsByDoctor[doctorName]!['completed'] as int) + 1;
+          } else {
+            todayReferralsByDoctor[doctorName]!['pending'] = 
+                (todayReferralsByDoctor[doctorName]!['pending'] as int) + 1;
+          }
+        }
+      }
+      
+      // Use today's referrals data
+      referralsToUse = todayReferralsByDoctor.values.toList();
+    } else {
+      // For other periods, use the standard filtered data
+      // Filter referrals by period using period range
+      referralsToUse = allReferrals.where((row) {
+        final createdAt = _parseVisitDate(row['createdAt']);
+        if (createdAt == null) return true; // Fallback: if missing, include
+        final range = _getPeriodRange(_selectedPeriod);
+        return !createdAt.isBefore(range[0]) && createdAt.isBefore(range[1]);
+      }).toList();
+    }
     
     // Apply additional filters
-    final referralsFiltered = dateFiltered.where((doctor) {
+    final referralsFiltered = referralsToUse.where((doctor) {
       // Filter by doctor if selected
       if (_selectedDoctor != null) {
         final doctorName = doctor['doctorName']?.toString() ?? '';
@@ -672,16 +728,38 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
       }
       
       // Filter by status if selected
-      if (_selectedStatus != null) {
-        if (_selectedStatus == 'Completed' && (doctor['completed'] == null || doctor['completed'] == 0)) {
-          return false;
-        } else if (_selectedStatus == 'Pending' && (doctor['pending'] == null || doctor['pending'] == 0)) {
-          return false;
+      if (_selectedStatus != null && _selectedStatus != 'All Status') {
+        if (_selectedStatus == 'Completed') {
+          // Only show doctors with completed referrals
+          final completedCount = doctor['completed'] as num? ?? 0;
+          if (completedCount <= 0) {
+            return false;
+          }
+        } else if (_selectedStatus == 'Pending') {
+          // Only show doctors with pending referrals
+          final pendingCount = doctor['pending'] as num? ?? 0;
+          if (pendingCount <= 0) {
+            return false;
+          }
         }
       }
       
       return true;
     }).toList();
+    
+    // Calculate daily summary totals when Today filter is selected
+    int totalReferrals = 0;
+    int totalCompleted = 0;
+    int totalPending = 0;
+    
+    if (_selectedPeriod == 'Today') {
+      // Count today's referrals for each doctor
+      for (var doctor in referralsFiltered) {
+        totalReferrals += (doctor['totalReferrals'] as num? ?? 0).toInt();
+        totalCompleted += (doctor['completed'] as num? ?? 0).toInt();
+        totalPending += (doctor['pending'] as num? ?? 0).toInt();
+      }
+    }
     
     // Determine if we need to show the View More button
     final hasMoreDoctors = referralsFiltered.length > _doctorDisplayLimit;
@@ -698,17 +776,39 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(Icons.medical_services, color: Colors.blue[700]),
-                const SizedBox(width: 8),
-                Text(
-                  'Referrals by Doctor (${_selectedPeriod})',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[800],
-                  ),
+                Row(
+                  children: [
+                    Icon(Icons.medical_services, color: Colors.blue[700]),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Referrals by Doctor (${_selectedPeriod})',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                  ],
                 ),
+                // Show daily summary when Today filter is selected
+                if (_selectedPeriod == 'Today')
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue[200]!),
+                    ),
+                    child: Text(
+                      'Today: $totalReferrals Total, $totalCompleted Completed, $totalPending Pending',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue[800],
+                      ),
+                    ),
+                  ),
               ],
             ),
             const SizedBox(height: 12),
@@ -728,11 +828,11 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                   SizedBox(
                     width: double.infinity,
                     child: DataTable(
-                      columns: const [
-                        DataColumn(label: Text('Doctor Name')),
-                        DataColumn(label: Text('Total Referrals')),
-                        DataColumn(label: Text('Completed')),
-                        DataColumn(label: Text('Pending')),
+                      columns: [
+                        const DataColumn(label: Text('Doctor Name')),
+                        DataColumn(label: Text(_selectedPeriod == 'Today' ? 'Today\'s Referrals' : 'Total Referrals')),
+                        DataColumn(label: Text(_selectedPeriod == 'Today' ? 'Today\'s Completed' : 'Completed')),
+                        DataColumn(label: Text(_selectedPeriod == 'Today' ? 'Today\'s Pending' : 'Pending')),
                       ],
                       rows: doctorsToDisplay.map((doctor) {
                         return DataRow(cells: [

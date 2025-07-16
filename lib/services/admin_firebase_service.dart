@@ -319,6 +319,13 @@ class AdminFirebaseService extends ChangeNotifier {
       }).toList();
       // ---
 
+      // Get all raw referrals for detailed filtering
+      final allReferralsSnapshot = await _firestore.collection('referrals').get();
+      final allReferrals = allReferralsSnapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return { ...data, 'id': doc.id};
+      }).toList();
+      
       _reportData = {
         'referralsByDoctor': referralsByDoctor,
         'visitsByTherapist': visitsByTherapist,
@@ -331,6 +338,7 @@ class AdminFirebaseService extends ChangeNotifier {
         'pendingFollowupsCount': pendingFollowups.length,
         'estimatedRevenue': revenueData['thisMonth'] ?? 0,
         'allVisits': allVisits, // Add the actual visits list for UI reports
+        'allReferrals': allReferrals, // Add raw referrals data for detailed filtering
       };
 
       notifyListeners();
