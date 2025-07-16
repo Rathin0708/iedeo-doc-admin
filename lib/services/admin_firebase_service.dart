@@ -1052,7 +1052,7 @@ class AdminFirebaseService extends ChangeNotifier {
         }
         
         // Check if this patient has a visit
-        String lastVisitDate = '';
+        String lastVisitDate = 'Not visited yet';
         if (latestVisits.containsKey(patientId)) {
           lastVisitDate = latestVisits[patientId]['dateStr'];
         }

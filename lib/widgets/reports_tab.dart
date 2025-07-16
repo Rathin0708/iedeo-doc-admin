@@ -28,7 +28,13 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
 
   // Helper: Parse a date value from Firestore or string
   DateTime? _parseVisitDate(dynamic d) {
+    // Handle null, empty strings, or 'Not visited yet' text
     if (d == null) return null;
+    if (d is String) {
+      if (d.isEmpty || d == 'Not visited yet' || d == '-') {
+        return null;
+      }
+    }
     if (d is DateTime) return d;
     
     // Handle Timestamp objects from Firestore
@@ -63,7 +69,10 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
       }
     } catch (_) {}
     
-    print('Failed to parse date: $d');
+    // Only log unexpected formats that should be dates but can't be parsed
+    if (d.toString().isNotEmpty && d.toString() != 'Not visited yet' && d.toString() != '-') {
+      print('Failed to parse date: $d');
+    }
     return null;
   }
 
