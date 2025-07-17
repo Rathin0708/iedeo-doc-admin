@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/admin_firebase_service.dart';
+import 'package:intl/intl.dart'; // Import the intl package for date formatting
 import 'patient_visit_logs_screen.dart';
 
 class TherapistAssignedPatientsScreen extends StatefulWidget {
@@ -29,6 +30,46 @@ class _TherapistAssignedPatientsScreenState
   String _searchQuery = '';
   String _status = 'All';
   String _problem = 'All';
+
+  // Helper: format with both date and time (in 12h am/pm, robust for Timestamp, DateTime, string)
+  String getFormattedDateTimeFull(dynamic v) {
+    try {
+      DateTime? dt;
+      if (v is DateTime) {
+        dt = v;
+      } else if (v != null && v
+          .toString()
+          .isNotEmpty) {
+        if (v.runtimeType.toString() == 'Timestamp') {
+          // Runtime check for Firestore Timestamp
+          dt = (v as dynamic).toDate();
+        } else if (v is String) {
+          dt = DateTime.tryParse(v);
+          if (dt == null && v.contains('/')) {
+            // dd/MM/yyyy HH:mm or dd/MM/yyyy
+            final parts = v.split(' ');
+            final dateParts = parts[0].split('/');
+            int? day = int.tryParse(dateParts[0]);
+            int? month = int.tryParse(dateParts[1]);
+            int? year = int.tryParse(dateParts[2]);
+            int hh = 0,
+                mm = 0;
+            if (parts.length > 1 && parts[1].contains(':')) {
+              final timeParts = parts[1].split(':');
+              hh = int.tryParse(timeParts[0]) ?? 0;
+              mm = int.tryParse(timeParts[1]) ?? 0;
+            }
+            if (day != null && month != null && year != null)
+              dt = DateTime(year, month, day, hh, mm);
+          }
+        }
+      }
+      if (dt != null) {
+        return DateFormat('dd/MM/yyyy hh:mm a').format(dt);
+      }
+    } catch (_) {}
+    return v?.toString() ?? '';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -176,8 +217,10 @@ class _TherapistAssignedPatientsScreenState
                               Text('Age: ${patient.age}'),
                               Text('Address: ${patient.address}'),
                               Text('Contact Info: ${patient.contactInfo ?? ""}'),
-                              Text('Assigned At: ${patient.assignedAt ?? ""}'),
-                              Text('Created At: ${patient.createdAt ?? ""}'),
+                              Text('Assigned At: ${getFormattedDateTimeFull(
+                                  patient.assignedAt)}'),
+                              Text('Created At: ${getFormattedDateTimeFull(
+                                  patient.createdAt)}'),
                               Text('Doctor ID: ${patient.doctorId ?? ""}'),
                               Text('Doctor Name: ${patient.doctorName ?? ""}'),
                               Text('Follow Up Required: ${patient.followUpRequired == true ? "Yes" : "No"}'),

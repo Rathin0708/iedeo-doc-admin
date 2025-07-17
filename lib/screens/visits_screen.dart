@@ -147,21 +147,80 @@ class _VisitsScreenState extends State<VisitsScreen> {
           children: [
             Text('Patient: ${data['patientName'] ?? 'N/A'}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             Text('Patient ID: ${data['patientId'] ?? ''}'),
-            Text('Date: ${data['visitDate'] ?? ''}   Time: ${data['visitTime'] ?? ''}'),
+            Text(getFormattedDateTime(data['visitDate'], data['visitTime'])),
             Text('Type: ${data['visitType'] ?? ''}'),
             Text('Status: ${data['status'] ?? ''}'),
             Text('VAS Score: ${data['vasScore'] ?? ''}'),
             Text('Treatment Notes: ${data['treatmentNotes'] ?? ''}'),
             Text('Progress Notes: ${data['progressNotes'] ?? ''}'),
             Text('Notes: ${data['notes'] ?? ''}'),
-            Text('Amount: ₹${data['amount'] ?? ''}'),
+            Text('Therapist Charges: ₹${data['amount'] ?? ''}'),
             Text('Follow Up Required: ${(data['followUpRequired'] ?? false) ? 'Yes' : 'No'}'),
-            Text('Created At: ${data['createdAt'] ?? ''}'),
+            // Text('Created At: ${data['createdAt'] ?? ''}'),
           ],
         ),
       ),
     );
   }
+
+  // Helper to format date and time in dd/MM/yyyy and 12-hour AM/PM
+  String getFormattedDateTime(dynamic dateValue, dynamic timeValue) {
+    // --- Date Extraction ---
+    String dateString = '';
+    try {
+      DateTime? date;
+      if (dateValue is DateTime) {
+        date = dateValue;
+      } else if (dateValue is Timestamp) {
+        date = dateValue.toDate();
+      } else if (dateValue is String && dateValue.isNotEmpty) {
+        // Try ISO
+        date = DateTime.tryParse(dateValue);
+        // Try dd/MM/yyyy
+        if (date == null && dateValue.contains('/')) {
+          final parts = dateValue.split('/');
+          if (parts.length == 3) {
+            final day = int.tryParse(parts[0]);
+            final month = int.tryParse(parts[1]);
+            final year = int.tryParse(parts[2]);
+            if (day != null && month != null && year != null) {
+              date = DateTime(year, month, day);
+            }
+          }
+        }
+      }
+      if (date != null) {
+        dateString = DateFormat('dd/MM/yyyy').format(date);
+      }
+    } catch (_) {
+      dateString = '';
+    }
+
+    // --- Time Extraction ---
+    String timeString = '';
+    try {
+      if (timeValue != null && timeValue.toString().isNotEmpty) {
+        String val = timeValue.toString();
+        DateTime? time;
+        if (val.contains(':')) {
+          final split = val.split(":");
+          final hh = int.tryParse(split[0]) ?? 0;
+          final mm = int.tryParse(split.length > 1 ? split[1] : '0') ?? 0;
+          time = DateTime(2000, 1, 1, hh, mm);
+          timeString = DateFormat('hh:mm a').format(time);
+        } else if (!val.contains('AM') && !val.contains('PM')) {
+          timeString = val;
+        } else {
+          timeString = val; // already formatted
+        }
+      }
+    } catch (_) {
+      timeString = '';
+    }
+
+    return 'Date: $dateString   Time: $timeString';
+  }
+
 
   @override
   Widget build(BuildContext context) {

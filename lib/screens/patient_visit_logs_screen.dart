@@ -9,7 +9,7 @@ class PatientVisitLogsScreen extends StatefulWidget {
   const PatientVisitLogsScreen({
     Key? key,
     required this.patientId,
-    required this.name, String? patientName,
+    required this.name, required String patientName,
   }) : super(key: key);
 
   @override
@@ -62,6 +62,44 @@ class _PatientVisitLogsScreenState extends State<PatientVisitLogsScreen> {
     'Ongoing',
     'Completed',
   ];
+
+  // Helper: format date+time robustly for Visit Date
+  String getFormattedDateTimeFull(dynamic v) {
+    try {
+      DateTime? dt;
+      if (v is DateTime) {
+        dt = v;
+      } else if (v != null && v
+          .toString()
+          .isNotEmpty) {
+        if (v.runtimeType.toString() == 'Timestamp') {
+          dt = (v as dynamic).toDate();
+        } else if (v is String) {
+          dt = DateTime.tryParse(v);
+          if (dt == null && v.contains('/')) {
+            final parts = v.split(' ');
+            final dateParts = parts[0].split('/');
+            int? day = int.tryParse(dateParts[0]);
+            int? month = int.tryParse(dateParts[1]);
+            int? year = int.tryParse(dateParts[2]);
+            int hh = 0,
+                mm = 0;
+            if (parts.length > 1 && parts[1].contains(':')) {
+              final timeParts = parts[1].split(':');
+              hh = int.tryParse(timeParts[0]) ?? 0;
+              mm = int.tryParse(timeParts[1]) ?? 0;
+            }
+            if (day != null && month != null && year != null)
+              dt = DateTime(year, month, day, hh, mm);
+          }
+        }
+      }
+      if (dt != null) {
+        return DateFormat('dd/MM/yyyy hh:mm a').format(dt);
+      }
+    } catch (_) {}
+    return v?.toString() ?? '';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -143,6 +181,7 @@ class _PatientVisitLogsScreenState extends State<PatientVisitLogsScreen> {
                 ],
               ),
             ),
+          
           // Visit log list
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
@@ -171,18 +210,20 @@ class _PatientVisitLogsScreenState extends State<PatientVisitLogsScreen> {
                     final visit = filteredVisits[idx].data() as Map<
                         String,
                         dynamic>;
+                    final patientName = visit['patientName'] ??
+                        widget.name;
                     final visitDate = visit['visitDate'] != null
                         ? (visit['visitDate'] as Timestamp).toDate()
                         : null;
                     final visitType = visit['visitType'] ?? 'N/A';
                     final therapistName = visit['therapistName'] ?? 'N/A';
                     // Guaranteed fallback: if patientName is missing in visit log doc, use the name passed in from parent screen
-                    final patientName = visit['patientName'] ??
-                        widget.name;
+
                     final quickNotes = (visit['quickNotes'] as List?)?.join(
                         ', ') ?? 'None';
+
                     final visitNotes = visit['visitNotes'] ?? '';
-                    final vasPainScore = visit['vasPainScore']?.toString() ??
+                    final vasPainScore = visit['vasScore']?.toString() ??
                         '';
                     final treatmentPlan = visit['treatmentPlan'] ?? '';
                     final progressNotes = visit['progressNotes'] ?? '';
@@ -201,8 +242,8 @@ class _PatientVisitLogsScreenState extends State<PatientVisitLogsScreen> {
                           children: [
                             // Main heading: Date and type
                             Text(
-                              'Visit Date: ${visitDate != null ? "${visitDate
-                                  .toLocal()}".split('.')[0] : 'N/A'}',
+                              'Visit Date: ${getFormattedDateTimeFull(
+                                  visitDate)}',
                               style: const TextStyle(
                                   fontWeight: FontWeight.bold, fontSize: 16),
                             ),
