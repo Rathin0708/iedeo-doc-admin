@@ -300,98 +300,109 @@ class _AdminDashboardState extends State<AdminDashboard>
       builder: (context, authService, child) {
         return Container(
           margin: const EdgeInsets.all(20),
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Color(0xFF4CAF7E),
-                Color(0xFF4CAF7E),
-                Color(0xFF4CAF7E)
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.red.withOpacity(0.3),
-                blurRadius: 20,
-                spreadRadius: 0,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Row(
+          height: 180, // Adjust height as needed
+          child: Stack(
+            fit: StackFit.expand,
             children: [
+              // Background image
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.asset(
+                  'assets/images/doc2.jpg',
+                  fit: BoxFit.cover,
+                ),
+              ),
+              // Gradient overlay
               Container(
-                width: 80,
-                height: 80,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.3),
-                    width: 2,
+                  gradient: LinearGradient(
+                    colors: [
+                      Color(0xCC4CAF7E), // greenish, with opacity
+                      Color(0xCC4CAF7E),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                 ),
-                child: const Icon(
-                  Icons.admin_panel_settings,
-                  size: 40,
-                  color: Colors.white,
-                ),
               ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              // Foreground content
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Row(
                   children: [
-                    Text(
-                      'Welcome back,',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      authService.adminName ?? 'Administrator',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'System Administrator',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.8),
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
+                      width: 80,
+                      height: 80,
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                          width: 2,
+                        ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                      child: const Icon(
+                        Icons.admin_panel_settings,
+                        size: 40,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.security,
-                            size: 16,
-                            color: Colors.white.withOpacity(0.9),
-                          ),
-                          const SizedBox(width: 6),
                           Text(
-                            'Super Administrator',
+                            'Welcome back,',
                             style: TextStyle(
                               color: Colors.white.withOpacity(0.9),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            authService.adminName ?? 'Administrator',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'System Administrator',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.8),
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.security,
+                                  size: 16,
+                                  color: Colors.white.withOpacity(0.9),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Super Administrator',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.9),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
