@@ -16,6 +16,8 @@ class ReportsTab extends StatefulWidget {
 }
 
 class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMixin {
+  // Default to showing the filter panel on initialization
+  bool _isFilterExpanded = true;
   // Override to keep the tab state alive when switching tabs
   @override
   bool get wantKeepAlive => true;
@@ -211,6 +213,506 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
     }
   }
 
+  // Build a responsive filter panel that adapts to both mobile and web screens
+  Widget _buildFilterPanel(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600; // Breakpoint for mobile devices
+    
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Filter Header with expand/collapse button
+            InkWell(
+              onTap: () {
+                setState(() {
+                  _isFilterExpanded = !_isFilterExpanded;
+                });
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Row(
+                  children: [
+                    Icon(Icons.filter_list, color: Colors.blue[700]),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Filters',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                    const Spacer(),
+                    // Period badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[100],
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        _selectedPeriod,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.blue[700],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      _isFilterExpanded ? Icons.expand_less : Icons.expand_more,
+                      color: Colors.grey[600],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Expandable Filter Content
+            AnimatedCrossFade(
+              duration: const Duration(milliseconds: 300),
+              crossFadeState: _isFilterExpanded 
+                  ? CrossFadeState.showSecond 
+                  : CrossFadeState.showFirst,
+              firstChild: const SizedBox(height: 0),
+              secondChild: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    
+                    // Period Filter with Date Range Picker
+                    Text(
+                      'Report Period:',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _buildPeriodChip('Today'),
+                          const SizedBox(width: 8),
+                          _buildPeriodChip('This Week'),
+                          const SizedBox(width: 8),
+                          _buildPeriodChip('This Month'),
+                          const SizedBox(width: 8),
+                          _buildPeriodChip('Last Month'),
+                          const SizedBox(width: 8),
+                          _buildPeriodChip('Custom Range'),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Doctor, Therapist, Status filters
+                    // Use responsive layout based on screen width
+                    isMobile
+                        ? _buildMobileFilters()
+                        : _buildWebFilters(),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  // Mobile-friendly stacked filter layout
+  Widget _buildMobileFilters() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Doctor Filter
+        Text(
+          'Doctor:',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey[300]!),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: ButtonTheme(
+              alignedDropdown: true,
+              child: DropdownButton<String>(
+                value: _selectedDoctor ?? 'All Doctors',
+                isExpanded: true,
+                icon: Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                items: _doctorsList
+                    .map((doctor) => DropdownMenuItem(
+                          value: doctor,
+                          child: Text(doctor),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedDoctor = value == 'All Doctors' ? null : value;
+                  });
+                },
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        
+        // Therapist Filter
+        Text(
+          'Therapist:',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey[300]!),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: ButtonTheme(
+              alignedDropdown: true,
+              child: DropdownButton<String>(
+                value: _selectedTherapist ?? 'All Therapists',
+                isExpanded: true,
+                icon: Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                items: _therapistsList
+                    .map((therapist) => DropdownMenuItem(
+                          value: therapist,
+                          child: Text(therapist),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedTherapist = value == 'All Therapists' ? null : value;
+                  });
+                },
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        
+        // Status Filter
+        Text(
+          'Status:',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey[300]!),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: ButtonTheme(
+              alignedDropdown: true,
+              child: DropdownButton<String>(
+                value: _selectedStatus ?? 'All Status',
+                isExpanded: true,
+                icon: Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                items: _statusList
+                    .map((status) => DropdownMenuItem(
+                          value: status,
+                          child: Text(status),
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedStatus = value == 'All Status' ? null : value;
+                  });
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  // Web-friendly row layout for filters
+  Widget _buildWebFilters() {
+    return Row(
+      children: [
+        // Doctor Filter
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Doctor:',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[700],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[300]!),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: ButtonTheme(
+                    alignedDropdown: true,
+                    child: DropdownButton<String>(
+                      value: _selectedDoctor ?? 'All Doctors',
+                      isExpanded: true,
+                      icon: Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      items: _doctorsList
+                          .map((doctor) => DropdownMenuItem(
+                                value: doctor,
+                                child: Text(doctor),
+                              ))
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedDoctor = value == 'All Doctors' ? null : value;
+                        });
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        
+        // Therapist Filter
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Therapist:',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[700],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[300]!),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: ButtonTheme(
+                    alignedDropdown: true,
+                    child: DropdownButton<String>(
+                      value: _selectedTherapist ?? 'All Therapists',
+                      isExpanded: true,
+                      icon: Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      items: _therapistsList
+                          .map((therapist) => DropdownMenuItem(
+                                value: therapist,
+                                child: Text(therapist),
+                              ))
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedTherapist = value == 'All Therapists' ? null : value;
+                        });
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        
+        // Status Filter
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Status:',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[700],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[300]!),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: ButtonTheme(
+                    alignedDropdown: true,
+                    child: DropdownButton<String>(
+                      value: _selectedStatus ?? 'All Status',
+                      isExpanded: true,
+                      icon: Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      items: _statusList
+                          .map((status) => DropdownMenuItem(
+                                value: status,
+                                child: Text(status),
+                              ))
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedStatus = value == 'All Status' ? null : value;
+                        });
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+  
+  // Helper method to build period filter chips
+  Widget _buildPeriodChip(String period) {
+    final isSelected = _selectedPeriod == period;
+    
+    return GestureDetector(
+      onTap: () async {
+        if (period == _selectedPeriod) return;
+        
+        // If Custom Range is selected, show date picker
+        if (period == 'Custom Range') {
+          // Initialize with reasonable defaults if not set
+          _customStartDate ??= DateTime.now().subtract(const Duration(days: 7));
+          _customEndDate ??= DateTime.now();
+          
+          // Show date range picker
+          final picked = await showDateRangePicker(
+            context: context,
+            firstDate: DateTime(2020),
+            lastDate: DateTime.now(),
+            initialDateRange: DateTimeRange(
+              start: _customStartDate!,
+              end: _customEndDate!,
+            ),
+            builder: (context, child) {
+              return Theme(
+                data: Theme.of(context).copyWith(
+                  colorScheme: ColorScheme.light(
+                    primary: Colors.teal[700]!, // Header background
+                    onPrimary: Colors.white, // Header text
+                    onSurface: Colors.black, // Calendar text
+                  ),
+                ),
+                child: child!,
+              );
+            },
+          );
+          
+          // If user cancels, revert to previous selection
+          if (picked == null) {
+            return;
+          }
+          
+          // Update the custom date range
+          _customStartDate = picked.start;
+          _customEndDate = picked.end;
+        }
+        
+        setState(() {
+          _selectedPeriod = period;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blue[700] : Colors.grey[200],
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? Colors.blue[700]! : Colors.grey[300]!,
+          ),
+        ),
+        child: Text(
+          period,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.grey[800],
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+  
+  // Helper method to build report type chips
+  Widget _buildReportTypeChip(String reportType) {
+    final isSelected = _selectedReportType == reportType;
+    
+    return GestureDetector(
+      onTap: () {
+        if (reportType == _selectedReportType) return;
+        setState(() {
+          _selectedReportType = reportType;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.teal[700] : Colors.grey[200],
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? Colors.teal[700]! : Colors.grey[300]!,
+          ),
+        ),
+        child: Text(
+          reportType,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.grey[800],
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
@@ -228,282 +730,85 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
 
         return Column(
           children: [
-            // Sticky Reports Header
+            // Sticky Reports Header with Responsive Filter Panel
             Container(
               color: Colors.grey[50],
               padding: const EdgeInsets.all(16),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Report Title and Period Selector
+                  // Report Title with Period Badge
                   Row(
                     children: [
                       Icon(Icons.calendar_today, color: Colors.teal[700]),
                       const SizedBox(width: 8),
-                      Text(
-                        _selectedPeriod == 'Custom Range' && _customStartDate != null && _customEndDate != null
-                            ? 'Reports for Custom Range: ${_formatDateForDisplay(_customStartDate!)} - ${_formatDateForDisplay(_customEndDate!)}'
-                            : 'Reports for $_selectedPeriod',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey[800],
-                        ),
-                      ),
-                      const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[100],
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.schedule, size: 16,
-                                color: Colors.blue[700]),
-                            const SizedBox(width: 4),
-                            Text(
-                              _selectedPeriod,
-                              style: TextStyle(
-                                color: Colors.blue[700],
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Additional filters row
-                  Row(
-                    children: [
-                      // Doctor filter
                       Expanded(
-                        child: DropdownButtonFormField<String>(
-                          decoration: InputDecoration(
-                            labelText: 'Doctor',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
+                        child: Text(
+                          _selectedPeriod == 'Custom Range' && _customStartDate != null && _customEndDate != null
+                              ? 'Reports for Custom Range: ${_formatDateForDisplay(_customStartDate!)} - ${_formatDateForDisplay(_customEndDate!)}'
+                              : 'Reports for $_selectedPeriod',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[800],
                           ),
-                          value: _selectedDoctor ?? 'All Doctors',
-                          items: _doctorsList
-                              .map((doctor) => DropdownMenuItem(
-                                    value: doctor,
-                                    child: Text(doctor),
-                                  ))
-                              .toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedDoctor = value == 'All Doctors' ? null : value;
-                            });
-                          },
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      // Therapist filter
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          decoration: InputDecoration(
-                            labelText: 'Therapist',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                          ),
-                          value: _selectedTherapist ?? 'All Therapists',
-                          items: _therapistsList
-                              .map((therapist) => DropdownMenuItem(
-                                    value: therapist,
-                                    child: Text(therapist),
-                                  ))
-                              .toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedTherapist = value == 'All Therapists' ? null : value;
-                            });
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      // Status filter
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          decoration: InputDecoration(
-                            labelText: 'Status',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                          ),
-                          value: _selectedStatus ?? 'All Status',
-                          items: _statusList
-                              .map((status) => DropdownMenuItem(
-                                    value: status,
-                                    child: Text(status),
-                                  ))
-                              .toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedStatus = value == 'All Status' ? null : value;
-                            });
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Filter Row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          decoration: InputDecoration(
-                            labelText: 'Report Period',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                          ),
-                          value: _selectedPeriod,
-                          items: [
-                            'Today',
-                            'This Week',
-                            'This Month',
-                            'Last Month',
-                            'Custom Range'
-                          ]
-                              .map((period) =>
-                              DropdownMenuItem(
-                                value: period,
-                                child: Text(period),
-                              ))
-                              .toList(),
-                          onChanged: (value) async {
-                            if (value == _selectedPeriod) return;
-                            
-                            // If Custom Range is selected, show date picker
-                            if (value == 'Custom Range') {
-                              // Initialize with reasonable defaults if not set
-                              _customStartDate ??= DateTime.now().subtract(const Duration(days: 7));
-                              _customEndDate ??= DateTime.now();
-                              
-                              // Show date range picker
-                              final picked = await showDateRangePicker(
-                                context: context,
-                                firstDate: DateTime(2020),
-                                lastDate: DateTime.now(),
-                                initialDateRange: DateTimeRange(
-                                  start: _customStartDate!,
-                                  end: _customEndDate!,
-                                ),
-                                builder: (context, child) {
-                                  return Theme(
-                                    data: Theme.of(context).copyWith(
-                                      colorScheme: ColorScheme.light(
-                                        primary: Colors.teal[700]!, // Header background
-                                        onPrimary: Colors.white, // Header text
-                                        onSurface: Colors.black, // Calendar text
-                                      ),
-                                    ),
-                                    child: child!,
-                                  );
-                                },
-                              );
-                              
-                              // If user cancels, revert to previous selection
-                              if (picked == null) {
-                                return;
-                              }
-                              
-                              // Update the custom date range
-                              _customStartDate = picked.start;
-                              _customEndDate = picked.end;
-                            }
-                            
-                            // Use microtask to defer state update to next frame
-                            Future.microtask(() {
-                              if (mounted) {
-                                setState(() {
-                                  _selectedPeriod = value!;
-                                });
-                              }
-                            });
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          decoration: InputDecoration(
-                            labelText: 'Report Type',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                          ),
-                          value: _selectedReportType,
-                          items: [
-                            'All Reports',
-                            'Referrals by Doctor',
-                            'Revenue Report',
-                            'Patient Report',
-                          ].map((type) =>
-                              DropdownMenuItem(
-                                value: type,
-                                child: Text(type),
-                              ))
-                              .toList(),
-                          onChanged: (value) {
-                            if (value == _selectedReportType) return;
-                            
-                            // Use microtask to defer state update to next frame
-                            Future.microtask(() {
-                              if (mounted) {
-                                setState(() {
-                                  _selectedReportType = value!;
-                                });
-                              }
-                            });
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 8),
+                      // Export PDF Button - Always visible
                       ElevatedButton.icon(
                         onPressed: isRevenueReady
                             ? () => _exportToPDF(context, firebaseService)
                             : null, // disable until data loaded
                         icon: const Icon(Icons.picture_as_pdf, size: 18),
                         label: isRevenueReady
-                            ? const Text('Export PDF')
-                            : Row(children: [
-                          SizedBox(
-                              width: 15,
-                              height: 15,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2)),
-                          SizedBox(width: 8),
-                          Text('Loading...')
-                        ]),
+                            ? const Text('Export')
+                            : SizedBox(
+                                width: 15,
+                                height: 15,
+                                child: CircularProgressIndicator(strokeWidth: 2)
+                              ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.red[400],
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Filter Section with Collapsible Panel
+                  _buildFilterPanel(context),
+                  
+                  // Report Type Selector - Chip Style
+                  const SizedBox(height: 16),
+                  Text(
+                    'Report Type:',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey[700],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildReportTypeChip('All Reports'),
+                        const SizedBox(width: 8),
+                        _buildReportTypeChip('Referrals by Doctor'),
+                        const SizedBox(width: 8),
+                        _buildReportTypeChip('Revenue Report'),
+                        const SizedBox(width: 8),
+                        _buildReportTypeChip('Patient Report'),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -713,13 +1018,10 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
   bool _showingAllDoctors = false;
   
   Widget _buildReferralsByDoctorReport(AdminFirebaseService firebaseService) {
-    // Get all raw referrals data
-    final rawReferrals = firebaseService
-        .reportData['allReferrals'] as List<Map<String, dynamic>>? ?? [];
-    
-    // Get the standard referrals by doctor data
-    final allReferrals = firebaseService
-        .reportData['referralsByDoctor'] as List<Map<String, dynamic>>? ?? [];
+    // Get all raw referrals data and referrals by doctor data
+    final dataF = firebaseService.reportData;
+    final rawReferrals = dataF['allReferrals'] as List<Map<String, dynamic>>? ?? [];
+    final allReferrals = dataF['referralsByDoctor'] as List<Map<String, dynamic>>? ?? [];
     
     // Create a special list for today's referrals if needed
     List<Map<String, dynamic>> referralsToUse;
@@ -876,11 +1178,15 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: Colors.blue[200]!),
                     ),
-                    child: Text(
-                      'Today: $totalReferrals Total, $totalCompleted Completed, $totalPending Pending',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue[800],
+                    child: Expanded(
+                      child: Flexible(
+                        child: Text(
+                          'Today: $totalReferrals Total, $totalCompleted Completed, $totalPending Pending',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue[800],
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -902,21 +1208,41 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                 children: [
                   SizedBox(
                     width: double.infinity,
-                    child: DataTable(
-                      columns: [
-                        const DataColumn(label: Text('Doctor Name')),
-                        DataColumn(label: Text(_selectedPeriod == 'Today' ? 'Today\'s Referrals' : 'Total Referrals')),
-                        DataColumn(label: Text(_selectedPeriod == 'Today' ? 'Today\'s Completed' : 'Completed')),
-                        DataColumn(label: Text(_selectedPeriod == 'Today' ? 'Today\'s Pending' : 'Pending')),
-                      ],
-                      rows: doctorsToDisplay.map((doctor) {
-                        return DataRow(cells: [
-                          DataCell(Text(doctor['doctorName'] ?? 'Unknown')),
-                          DataCell(Text('${doctor['totalReferrals'] ?? 0}')),
-                          DataCell(Text('${doctor['completed'] ?? 0}')),
-                          DataCell(Text('${doctor['pending'] ?? 0}')),
-                        ]);
-                      }).toList(),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isMobile = constraints.maxWidth < 600;
+                        final table = DataTable(
+                          columns: [
+                            const DataColumn(label: Text('Doctor Name')),
+                            DataColumn(label: Text(_selectedPeriod == 'Today'
+                                ? 'Today\'s Referrals'
+                                : 'Total Referrals')),
+                            DataColumn(label: Text(_selectedPeriod == 'Today'
+                                ? 'Today\'s Completed'
+                                : 'Completed')),
+                            DataColumn(label: Text(_selectedPeriod == 'Today'
+                                ? 'Today\'s Pending'
+                                : 'Pending')),
+                          ],
+                          rows: doctorsToDisplay.map((doctor) {
+                            return DataRow(cells: [
+                              DataCell(Text(doctor['doctorName'] ?? 'Unknown')),
+                              DataCell(
+                                  Text('${doctor['totalReferrals'] ?? 0}')),
+                              DataCell(Text('${doctor['completed'] ?? 0}')),
+                              DataCell(Text('${doctor['pending'] ?? 0}')),
+                            ]);
+                          }).toList(),
+                        );
+                        if (isMobile) {
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: table,
+                          );
+                        } else {
+                          return table;
+                        }
+                      },
                     ),
                   ),
                   // Show View More button if there are more doctors
@@ -1150,22 +1476,35 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                 children: [
                   SizedBox(
                     width: double.infinity,
-                    // DataTable renders the patient details
-                    child: DataTable(
-                      columns: const [
-                        DataColumn(label: Text('Patient Name')),
-                        DataColumn(label: Text('Therapist')),
-                        DataColumn(label: Text('Doctor')),
-                        DataColumn(label: Text('Last Visit')),
-                      ],
-                      rows: patientsToDisplay.map((patient) {
-                        return DataRow(cells: [
-                          DataCell(Text(getDisplayPatientName(patient))),
-                          DataCell(Text(patient['therapist'] ?? 'Unknown')),
-                          DataCell(Text(patient['doctor'] ?? 'Unknown')),
-                          DataCell(Text(patient['lastVisit'] ?? '-')),
-                        ]);
-                      }).toList(),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isMobile = constraints.maxWidth < 600;
+                        final table = DataTable(
+                          columns: const [
+                            DataColumn(label: Text('Patient Name')),
+                            DataColumn(label: Text('Therapist')),
+                            DataColumn(label: Text('Doctor')),
+                            DataColumn(label: Text('Last Visit')),
+                          ],
+                          rows: patientsToDisplay.map((patient) {
+                            return DataRow(cells: [
+                              DataCell(Text(getDisplayPatientName(patient))),
+                              DataCell(Text(patient['therapist'] ?? 'Unknown')),
+                              DataCell(Text(patient['doctor'] ?? 'Unknown')),
+                              DataCell(Text(patient['lastVisit'] ?? '-')),
+                            ]);
+                          }).toList(),
+                        );
+                        // Only wrap on mobile
+                        if (isMobile) {
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: table,
+                          );
+                        } else {
+                          return table;
+                        }
+                      },
                     ),
                   ),
                   // Show View More button if there are more patients
