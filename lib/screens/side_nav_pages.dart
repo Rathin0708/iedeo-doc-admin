@@ -28,6 +28,7 @@ class AdminShell extends StatefulWidget {
 
 class _AdminShellState extends State<AdminShell> {
   int _selectedIndex = 0;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   // Helper widgets for inner content per tab, not const due to DashboardBody
   final List<Widget> _pages = [
@@ -39,17 +40,60 @@ class _AdminShellState extends State<AdminShell> {
     const SettingScreen(),
   ];
 
+  // List of page titles that correspond to the navigation items
+  final List<String> _pageTitles = [
+    'Dashboard',
+    'Patients',
+    'Visits',
+    'Users',
+    'Reports',
+    'Settings',
+  ];
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: Colors.grey[50],
+      // Add AppBar for all screen sizes
+      appBar: AppBar(
+        title: Text(_pageTitles[_selectedIndex]),
+        backgroundColor: const Color(0xFF4CAF7E),
+        foregroundColor: Colors.white,
+        // Only show the menu button when the drawer is not permanently visible
+        leading: LayoutBuilder(builder: (context, _) {
+          final screenWidth = MediaQuery.of(context).size.width;
+          if (screenWidth < 1000) {
+            return IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: () {
+                _scaffoldKey.currentState?.openDrawer();
+              },
+            );
+          }
+          return const SizedBox.shrink(); // No leading widget when sidebar is visible
+        }),
+      ),
+      // Add drawer for small screens
+      drawer: MediaQuery.of(context).size.width < 1000 ? Drawer(
+        child: SideNavbar(
+          selectedIndex: _selectedIndex,
+          onItemSelected: (i) {
+            setState(() => _selectedIndex = i);
+            // Close the drawer after selection on small screens
+            Navigator.pop(context);
+          },
+        ),
+      ) : null,
       body: LayoutBuilder(
         builder: (context, constraints) {
           final stack = IndexedStack(
             index: _selectedIndex,
             children: _pages,
           );
-          if (constraints.maxWidth >= 1100) {
+          
+          // Show side navbar permanently for screens >= 1000px width
+          if (constraints.maxWidth >= 1000) {
             return Row(
               children: [
                 SideNavbar(
@@ -60,6 +104,8 @@ class _AdminShellState extends State<AdminShell> {
               ],
             );
           }
+          
+          // For smaller screens, just show the content
           return stack;
         },
       ),
