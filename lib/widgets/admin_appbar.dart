@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../services/admin_firebase_service.dart';
 import '../services/admin_auth_service.dart';
 
-/// Displays the icon, title, and optional subtitle in a row, suitable for centered placement in AppBar
+/// Displays only the title and optional subtitle, suitable for centered placement in AppBar
 class AdminAppBarCenter extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -15,44 +15,25 @@ class AdminAppBarCenter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(
-            Icons.admin_panel_settings,
+        Text(
+          title,
+          style: const TextStyle(
             color: Colors.white,
-            size: 24,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+        if (subtitle.isNotEmpty)
+          Text(
+            subtitle,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.8),
+              fontSize: 12,
             ),
-            if (subtitle.isNotEmpty)
-              Text(
-                subtitle,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.8),
-                  fontSize: 12,
-                ),
-              ),
-          ],
-        ),
+          ),
       ],
     );
   }
@@ -90,29 +71,7 @@ class AdminAppBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Main title
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (subtitle.isNotEmpty)
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 12,
-                  ),
-                ),
-            ],
-          ),
+          AdminAppBarCenter(title: title, subtitle: subtitle),
           const Spacer(),
           // Refresh button
           IconButton(
