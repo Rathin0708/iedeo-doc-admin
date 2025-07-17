@@ -1,11 +1,11 @@
 import 'dart:ui';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/admin_auth_service.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:google_sign_in_web/google_sign_in_web.dart'; // Import the official Google Sign-In button for web
+// Removed unused import
+import 'package:firebase_auth/firebase_auth.dart';
 
 class AdminSignup extends StatefulWidget {
   const AdminSignup({super.key});
@@ -102,71 +102,96 @@ class _AdminSignupState extends State<AdminSignup>
   // Redirect after Google sign up success
   Future<void> _handleGoogleSignUp(AdminAuthService authService) async {
     try {
-      // Step 1: Google OAuth
+      // Show loading indicator
+      _showLoadingDialog("Connecting with Google...");
+      
+      // Step 1: Google OAuth - this will get the email from Google
       final user = await authService.googleAuthOnlyForRegistration();
+      
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+      
       if (user == null) {
         if (!mounted) return;
-        _showErrorDialog("Google Sign-Up failed.");
+        _showErrorDialog("Google Sign-Up was cancelled or failed.");
         return;
       }
-      // Step 2: Prompt for user name via dialog
-      final String? enteredName = await _promptForName();
-      if (!mounted) return;
-      if (enteredName == null || enteredName.trim().length < 2) {
-        _showErrorDialog("Please enter your full name.");
-        await authService.signOut();
-        return;
-      }
-      // Step 3: Finish registration with manual name entry and Google email
-      final bool success = await authService.finalizeGoogleSignUp(user, enteredName.trim());
-      if (!mounted) return;
-      if (success) {
-        Navigator.of(context).pushReplacementNamed('/dashboard');
-      } else if (authService.errorMessage != null) {
-        _showErrorDialog(authService.errorMessage!);
-      } else {
-        _showErrorDialog('Google authentication failed. Please try again.');
+      
+      // Step 2: Fill the email field with Google email and focus on name field
+      if (mounted) {
+        // Generate a random secure password
+        final String securePassword = _generateSecurePassword();
+        
+        setState(() {
+          // Auto-fill email from Google
+          _emailController.text = user.email ?? '';
+          // Clear name field and focus on it for manual entry
+          _nameController.text = '';
+          // Auto-fill password fields with secure password
+          _passwordController.text = securePassword;
+          _confirmPasswordController.text = securePassword;
+        });
+        
+        // Show a snackbar to guide the user
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Email filled from Google. Please enter your full name to complete registration.'),
+            duration: Duration(seconds: 5),
+            backgroundColor: Colors.blue[700],
+          )
+        );
+        
+        // Focus on the name field
+        FocusScope.of(context).requestFocus(
+          FocusNode()  // Create a new focus node
+        );
+        // Use a small delay to ensure UI is updated before changing focus
+        Future.delayed(Duration(milliseconds: 100), () {
+          if (mounted) {
+            // Request focus on the name field
+            final FocusNode nameFieldFocus = FocusNode();
+            FocusScope.of(context).requestFocus(nameFieldFocus);
+            // Scroll to the name field
+            Scrollable.ensureVisible(
+              _nameController.text.isEmpty ? _nameController.buildTextSpan(context: context, style: TextStyle(), withComposing: false).toPlainText().isEmpty ? context : context : context,
+              duration: Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+            );
+          }
+        });
       }
     } catch (e) {
+      // Close loading dialog if open
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      
       if (mounted) {
         _showErrorDialog('Google Sign-Up failed: ${e.toString()}');
       }
     }
   }
-  Future<String?> _promptForName() async {
-    String? name;
-    await showDialog(
+  
+  // Show loading dialog with custom message
+  void _showLoadingDialog(String message) {
+    showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) {
-        final controller = TextEditingController();
+      builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text("Enter Full Name"),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(labelText: "Full Name"),
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Expanded(child: Text(message)),
+            ],
           ),
-          actions: [
-            TextButton(
-              child: const Text("Cancel"),
-              onPressed: () => Navigator.of(ctx).pop(),
-            ),
-            ElevatedButton(
-              child: const Text("Continue"),
-              onPressed: () {
-                name = controller.text;
-                Navigator.of(ctx).pop();
-              },
-            ),
-          ],
         );
       },
     );
-    return name;
   }
-
-
+  // Removed unused _promptForName method as we now fill the form directly
+  // Handle both regular signup and Google signup completion
   Future<void> _signUp() async {
     if (!_formKey.currentState!.validate() || !_acceptedTerms) {
       // If form is invalid or terms not accepted, shake container
@@ -175,19 +200,43 @@ class _AdminSignupState extends State<AdminSignup>
       }
       return;
     }
+    
     final authService = Provider.of<AdminAuthService>(context, listen: false);
-    final success = await authService.signUp(
-      name: _nameController.text.trim(),
-      email: _emailController.text.trim(),
-      password: _passwordController.text,
-      role: _selectedRole,
-    );
+    
+    // Show loading indicator
+    _showLoadingDialog("Creating your account...");
+    
+    bool success = false;
+    final currentUser = FirebaseAuth.instance.currentUser;
+    
+    // Check if we're completing a Google signup or doing a regular signup
+    if (currentUser != null && currentUser.email == _emailController.text.trim()) {
+      // This is a Google signup completion - user is already authenticated with Google
+      // Just need to finalize with the name from the form
+      success = await authService.finalizeGoogleSignUp(currentUser, _nameController.text.trim());
+    } else {
+      // Regular email/password signup
+      success = await authService.signUp(
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        role: _selectedRole,
+      );
+    }
+    
+    // Close loading dialog
+    if (mounted) Navigator.of(context).pop();
+    
+    if (!mounted) return;
+    
     if (!success && authService.errorMessage != null) {
       _showErrorDialog(authService.errorMessage!);
     } else if (success) {
-      if (mounted) {
-        Navigator.of(context).pushReplacementNamed('/dashboard');
-      }
+      // Show success message before navigating
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Account created successfully!'))
+      );
+      Navigator.of(context).pushReplacementNamed('/dashboard');
     }
   }
 
@@ -221,25 +270,16 @@ class _AdminSignupState extends State<AdminSignup>
     );
   }
 
-  void _showSuccessDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) =>
-          AlertDialog(
-            title: const Text('Success!'),
-            content: const Text(
-                'Admin account created successfully. You are now logged in.'),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(ctx).pop(); // Close the dialog
-                  Navigator.of(context).pop(); // Pop back to login screen
-                },
-                child: const Text('OK'),
-              ),
-            ],
-          ),
+  // Generate a secure random password for Google sign-up
+  String _generateSecurePassword() {
+    const int length = 12;
+    const String charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#%^&*()_-+=<>?';
+    final Random random = Random.secure();
+    return String.fromCharCodes(
+      Iterable.generate(
+        length, 
+        (_) => charset.codeUnitAt(random.nextInt(charset.length)),
+      ),
     );
   }
 
