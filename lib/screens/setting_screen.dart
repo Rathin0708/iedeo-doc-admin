@@ -112,7 +112,7 @@ class _SettingScreenState extends State<SettingScreen> {
                 const Text('Logout', style: TextStyle(color: Colors.red)),
                 onTap: () async {
                   await Provider.of<AdminAuthService>(context, listen: false)
-                      .signOut();
+                      .signOut(context: context);
                 },
               ),
             ]

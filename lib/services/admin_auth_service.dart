@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -463,7 +464,7 @@ class AdminAuthService extends ChangeNotifier {
     }
   }
 
-  Future<void> signOut() async {
+  Future<void> signOut({BuildContext? context}) async {
     try {
       // Clear cached admin data first
       _cachedAdmin = null;
@@ -484,12 +485,28 @@ class AdminAuthService extends ChangeNotifier {
       notifyListeners();
       
       print('✅ Admin signed out successfully');
+      
+      // If context is provided, navigate to login screen
+      if (context != null) {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/',
+          (route) => false, // Remove all previous routes
+        );
+      }
     } catch (e) {
       print('❌ Sign out error: $e');
       // Force logout in case of error
       _isAuthenticated = false;
       _resetAuthState();
       notifyListeners();
+      
+      // Even if there's an error, try to navigate to login screen if context is provided
+      if (context != null) {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/',
+          (route) => false,
+        );
+      }
     }
   }
 
