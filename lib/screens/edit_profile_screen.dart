@@ -55,36 +55,29 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() {
       _isLoading = true;
     });
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    
     final newName = _nameController.text.trim();
     final newEmail = _emailController.text.trim();
     final newPhone = _phoneController.text.trim();
+    
     try {
-      // Update name/email in FirebaseAuth
-      await user.updateDisplayName(newName);
-      // For email, require re-auth or use change email logic in real apps
-      // await user.updateEmail(newEmail);
-      // Update Firestore admin doc
-      await FirebaseFirestore.instance
-          .collection('admins')
-          .doc(user.uid)
-          .update({
-        'name': newName,
-        'email': newEmail,
-        'phone': newPhone,
-      });
-      // Instantly update provider so UI reflects changes everywhere
+      // Use the new updateAdminProfile method that updates both local cache and Firestore
       final authService = Provider.of<AdminAuthService>(context, listen: false);
-      authService.updateLocalProfile(
+      final success = await authService.updateAdminProfile(
         name: newName,
         email: newEmail,
         phone: newPhone,
       );
-      if (context.mounted) {
+      
+      if (success && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Profile updated successfully')));
+          const SnackBar(content: Text('Profile updated successfully'))
+        );
         Navigator.pop(context);
+      } else {
+        setState(() {
+          _errorMsg = 'Failed to update profile. Please try again.';
+        });
       }
     } catch (e) {
       setState(() {

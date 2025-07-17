@@ -176,12 +176,11 @@ class AdminAuthService extends ChangeNotifier {
     }
   }
 
-  void _createInstantSession(User user) {
+  void _createInstantSession(User user, {String? manualName}) {
     // INSTANT authentication without waiting for Firebase
     _isAuthenticated = true;
-    _adminName = user.displayName ?? user.email
-        ?.split('@')
-        .first ?? 'Admin';
+    // Use manually provided name first, then displayName, then email
+    _adminName = manualName ?? user.displayName ?? user.email?.split('@').first ?? 'Admin';
     _adminEmail = user.email;
     _adminRole = 'admin';
 
@@ -194,7 +193,7 @@ class AdminAuthService extends ChangeNotifier {
     );
     _lastCacheTime = DateTime.now();
 
-    print('⚡ INSTANT admin session created: ${user.email}');
+    print('⚡ INSTANT admin session created: ${_adminName}');
     notifyListeners();
   }
 
@@ -306,24 +305,15 @@ class AdminAuthService extends ChangeNotifier {
           .timeout(const Duration(seconds: 5));
 
       if (result.user != null) {
-        // INSTANT session creation
-        _isAuthenticated = true;
-        _adminName = name;
-        _adminEmail = email;
-        _adminRole = role;
-
-        _cachedAdmin = AdminUser(
-          uid: result.user!.uid,
-          name: name,
-          email: email,
-          role: role,
-          status: 'active',
-        );
-        _lastCacheTime = DateTime.now();
-
+        // Update Firebase Auth display name immediately
+        await result.user!.updateDisplayName(name);
+        
         // Create Firebase document in background
         _createAdminDocumentInBackground(result.user!, name, email, role);
-
+        
+        // Create session with the provided name
+        _createInstantSession(result.user!, manualName: name);
+        
         print('⚡ INSTANT admin account created: $name');
         return true;
       }
@@ -413,7 +403,12 @@ class AdminAuthService extends ChangeNotifier {
         'authProvider': 'google',
         'lastLogin': FieldValue.serverTimestamp(),
       });
-      _createInstantSession(user);
+      
+      // Update Firebase Auth display name
+      await user.updateDisplayName(name);
+      
+      // Create session with manually provided name
+      _createInstantSession(user, manualName: name);
       _isLoadingGoogle = false;
       notifyListeners();
       return true;
@@ -717,5 +712,58 @@ class AdminAuthService extends ChangeNotifier {
     if (name != null) _adminName = name;
     if (email != null) _adminEmail = email;
     notifyListeners();
+  }
+  
+  /// Updates admin profile both locally and in Firestore database.
+  /// Returns true if update was successful, false otherwise.
+  Future<bool> updateAdminProfile({String? name, String? email, String? phone}) async {
+    try {
+      // Get current user
+      final user = _auth.currentUser;
+      if (user == null) return false;
+      
+      // Prepare update data
+      final Map<String, dynamic> updateData = {};
+      
+      if (name != null && name.trim().isNotEmpty) {
+        updateData['name'] = name.trim();
+        // Also update Firebase Auth display name
+        await user.updateDisplayName(name.trim());
+      }
+      
+      if (email != null && email.trim().isNotEmpty && email != user.email) {
+        // Email update requires re-authentication, not implemented here
+        // This would need a separate flow with password verification
+      }
+      
+      if (phone != null) {
+        updateData['phone'] = phone;
+      }
+      
+      // Only proceed if we have data to update
+      if (updateData.isEmpty) return true;
+      
+      // Add timestamp
+      updateData['lastUpdated'] = FieldValue.serverTimestamp();
+      
+      // Update Firestore
+      await _firestore.collection('admins').doc(user.uid).update(updateData);
+      
+      // Update local cache
+      if (name != null) _adminName = name.trim();
+      if (email != null && email != user.email) _adminEmail = email.trim();
+      
+      // Clear cached admin to force refresh from server next time
+      _cachedAdmin = null;
+      _lastCacheTime = null;
+      
+      // Notify listeners to update UI
+      notifyListeners();
+      
+      return true;
+    } catch (e) {
+      debugPrint('❌ Error updating admin profile: $e');
+      return false;
+    }
   }
 }

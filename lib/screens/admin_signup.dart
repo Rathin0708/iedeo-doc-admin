@@ -21,6 +21,12 @@ class _AdminSignupState extends State<AdminSignup>
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  
+  // Focus node for name field
+  FocusNode? _nameFocusNode;
+  
+  // Key for name field to scroll to it
+  final _nameFieldKey = GlobalKey();
 
   String _selectedRole = 'super_admin'; // Default to super_admin for first admin
   bool _obscurePassword = true;
@@ -46,6 +52,8 @@ class _AdminSignupState extends State<AdminSignup>
   void initState() {
     super.initState();
     _checkFirstAdmin();
+    // Initialize focus node
+    _nameFocusNode = FocusNode();
     // Set up shake animation
     _shakeController = AnimationController(
       vsync: this,
@@ -64,6 +72,7 @@ class _AdminSignupState extends State<AdminSignup>
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _shakeController?.dispose();
+    _nameFocusNode?.dispose();
     super.dispose();
   }
 
@@ -141,22 +150,26 @@ class _AdminSignupState extends State<AdminSignup>
           )
         );
         
-        // Focus on the name field
-        FocusScope.of(context).requestFocus(
-          FocusNode()  // Create a new focus node
-        );
+        // Create a focus node for the name field if it doesn't exist
+        if (_nameFocusNode == null) {
+          _nameFocusNode = FocusNode();
+        }
+        
         // Use a small delay to ensure UI is updated before changing focus
         Future.delayed(Duration(milliseconds: 100), () {
           if (mounted) {
             // Request focus on the name field
-            final FocusNode nameFieldFocus = FocusNode();
-            FocusScope.of(context).requestFocus(nameFieldFocus);
-            // Scroll to the name field
-            Scrollable.ensureVisible(
-              _nameController.text.isEmpty ? _nameController.buildTextSpan(context: context, style: TextStyle(), withComposing: false).toPlainText().isEmpty ? context : context : context,
-              duration: Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-            );
+            FocusScope.of(context).requestFocus(_nameFocusNode);
+            
+            // Find the name field's render object to scroll to it
+            final RenderObject? renderObject = _nameFieldKey.currentContext?.findRenderObject();
+            if (renderObject != null) {
+              Scrollable.ensureVisible(
+                _nameFieldKey.currentContext!,
+                duration: Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+            }
           }
         });
       }
@@ -387,7 +400,9 @@ class _AdminSignupState extends State<AdminSignup>
                               children: [
                                 // Name Field
                                 TextFormField(
+                                  key: _nameFieldKey,
                                   controller: _nameController,
+                                  focusNode: _nameFocusNode,
                                   textCapitalization: TextCapitalization.words,
                                   decoration: InputDecoration(
                                     labelText: 'Full Name',
