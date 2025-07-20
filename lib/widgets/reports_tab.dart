@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/admin_firebase_service.dart';
 import 'package:printing/printing.dart';
-
 // PDF export dependencies
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart'; // For PdfColor, PdfPageFormat
 import 'package:flutter/services.dart' show rootBundle;
+// Excel export dependencies
+import 'package:excel/excel.dart' as xls;
+import 'dart:typed_data';
+import 'package:file_saver/file_saver.dart';
 
 class ReportsTab extends StatefulWidget {
   const ReportsTab({super.key});
@@ -776,6 +779,28 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                             borderRadius: BorderRadius.circular(8),
                           ),
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Excel Export Button
+                      ElevatedButton.icon(
+                        onPressed: isRevenueReady
+                            ? () => _exportToExcel(context, firebaseService)
+                            : null,
+                        icon: const Icon(Icons.table_chart, size: 18),
+                        label: isRevenueReady ? const Text('Export Excel')
+                            : SizedBox(
+                            width: 15,
+                            height: 15,
+                            child: CircularProgressIndicator(strokeWidth: 2)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green[600],
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
                         ),
                       ),
                     ],
@@ -1881,19 +1906,170 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
               Map<String, dynamic>>? ?? [];
       final period = _selectedPeriod;
       final range = _getPeriodRange(period);
-      rows.add(['Patient Name', 'Therapist', 'Doctor', 'Last Visit']);
+      rows.add([
+        'Patient Name',
+        'Therapist',
+        'Doctor',
+        'Last Visit',
+        'Total Amount',
+        'Doctor %',
+        'Doctor Commission',
+        'Therapist Fees'
+      ]);
+      // For financial columns, mimic the period logic in the widget
+      final allVisits = firebaseService.reportData['allVisits'] as List<
+          Map<String, dynamic>>? ?? [];
+      Map<String, List<Map<String, dynamic>>> visitsByPatientId = {};
+      for (final v in allVisits) {
+        final pid = v['patientId']?.toString() ?? '';
+        if (pid.isEmpty) continue;
+        visitsByPatientId.putIfAbsent(pid, () => []).add(v);
+      }
       for (final row in data) {
-        final lastVisit = _parseVisitDate(row['lastVisit']);
-        if (lastVisit != null &&
-            (lastVisit.isBefore(range[0]) || !lastVisit.isBefore(range[1]))) {
-          continue;
+        final patientId = row['patientId']?.toString() ?? '';
+        // Visits in period
+        final visitsInPeriod = (visitsByPatientId[patientId] ?? []).where((
+            visit) {
+          final dt = _parseVisitDate(visit['visitDate']);
+          return dt != null && !dt.isBefore(range[0]) && dt.isBefore(range[1]);
+        }).toList();
+        // Latest visit in period
+        Map<String, dynamic>? latest;
+        for (final v in visitsInPeriod) {
+          final visitDate = _parseVisitDate(v['visitDate']);
+          if (visitDate == null) continue;
+          if (latest == null || visitDate.isAfter(
+              _parseVisitDate(latest['visitDate']) ?? DateTime(1900))) {
+            latest = v;
+          }
+        }
+        // Last Visit (as shown on UI)
+        String lastVisitDisplay = '-';
+        DateTime? lastVisitDt;
+        String? lastVisitTime;
+        if (latest != null) {
+          final dtField = latest['visitDate'];
+          if (dtField is DateTime)
+            lastVisitDt = dtField;
+          else if (dtField != null && dtField.toString().contains('seconds=')) {
+            final match = RegExp(r'seconds=(\d+)').firstMatch(
+                dtField.toString());
+            if (match != null) lastVisitDt =
+                DateTime.fromMillisecondsSinceEpoch(
+                    int.parse(match.group(1)!) * 1000);
+          } else if (dtField != null) {
+            lastVisitDt = DateTime.tryParse(dtField.toString());
+          }
+          lastVisitTime = latest['visitTime']?.toString();
+        }
+        if (lastVisitDt != null) {
+          final now = DateTime.now();
+          bool isToday = lastVisitDt.year == now.year &&
+              lastVisitDt.month == now.month && lastVisitDt.day == now.day;
+          if (isToday && lastVisitTime != null && lastVisitTime != '-' &&
+              lastVisitTime
+                  .trim()
+                  .isNotEmpty) {
+            final timeParts = RegExp(r'^(\d{1,2}):(\d{2})').firstMatch(
+                lastVisitTime);
+            if (timeParts != null) {
+              int hour = int.parse(timeParts.group(1)!);
+              int minute = int.parse(timeParts.group(2)!);
+              String ampm = hour >= 12 ? 'pm' : 'am';
+              int hour12 = hour % 12;
+              if (hour12 == 0) hour12 = 12;
+              lastVisitDisplay =
+              '$hour12:${minute.toString().padLeft(2, '0')} $ampm';
+            } else {
+              lastVisitDisplay = lastVisitTime;
+            }
+          } else {
+            lastVisitDisplay =
+            '${lastVisitDt.day.toString().padLeft(2, '0')}-${lastVisitDt.month
+                .toString().padLeft(2, '0')}-${lastVisitDt.year}';
+          }
+        } else {
+          lastVisitDisplay = '-';
+        }
+        // Total Amount (sum all visit amounts in period for this patient)
+        double sum = 0;
+        for (var v in visitsInPeriod) {
+          final amtRaw = v['amount'];
+          double? val;
+          if (amtRaw is num)
+            val = amtRaw.toDouble();
+          else if (amtRaw is String && amtRaw
+              .trim()
+              .isNotEmpty)
+            val = double.tryParse(
+                amtRaw.replaceAll('₹', '').replaceAll(',', '').trim());
+          if (val != null) sum += val;
+        }
+        String totalAmountDisplay = sum > 0
+            ? '₹${sum.toStringAsFixed(2)}'
+            : '-';
+        if (sum <= 0) {
+          if (latest != null && latest['amount'] != null &&
+              latest['amount'].toString() != '-') {
+            totalAmountDisplay = '₹${latest['amount']}';
+          } else if (row['amount'] != null && row['amount'] != '-') {
+            totalAmountDisplay = '₹${row['amount']}';
+          } else
+          if (row['estimatedCost'] != null && row['estimatedCost'] != '-') {
+            totalAmountDisplay = '₹${row['estimatedCost']}';
+          }
+        }
+        // Doctor %
+        String docPerc = '-';
+        if (latest != null && latest['doctorCommissionPercent'] != null) {
+          docPerc = latest['doctorCommissionPercent'].toString();
+          if (docPerc != '-' && !docPerc.contains('%'))
+            docPerc = '$docPerc%';
+        } else if (row['doctorCommissionPercent'] != null) {
+          docPerc = row['doctorCommissionPercent'].toString();
+          if (docPerc != '-' && !docPerc.contains('%'))
+            docPerc = '$docPerc%';
+        }
+        // Doctor commission
+        String docCommDisplay = '-';
+        {
+          final totalAmountRaw = totalAmountDisplay
+              .replaceAll('₹', '')
+              .replaceAll(',', '')
+              .trim();
+          final percRaw = docPerc.replaceAll('%', '').trim();
+          final totalAmount = double.tryParse(totalAmountRaw);
+          final percentNumeric = double.tryParse(percRaw);
+          if (totalAmount != null && percentNumeric != null) {
+            double commission = totalAmount * (percentNumeric / 100.0);
+            docCommDisplay = '₹${commission.toStringAsFixed(2)}';
+          }
+        }
+        // Therapist fees
+        String therapistFeesDisplay = '-';
+        {
+          final totalAmountRaw = totalAmountDisplay
+              .replaceAll('₹', '')
+              .replaceAll(',', '')
+              .trim();
+          final percRaw = docPerc.replaceAll('%', '').trim();
+          final totalAmount = double.tryParse(totalAmountRaw);
+          final percentNumeric = double.tryParse(percRaw);
+          if (totalAmount != null && percentNumeric != null) {
+            double commission = totalAmount * (percentNumeric / 100.0);
+            double therapistFees = totalAmount - commission;
+            therapistFeesDisplay = '₹${therapistFees.toStringAsFixed(2)}';
+          }
         }
         rows.add([
           getDisplayPatientName(row),
-          // Use patientName if present, else name, else blank. Ensures correct export display even if Firestore/old data mixes key names.
-          row['therapist'] ?? '',
-          row['doctor'] ?? '',
-          row['lastVisit'] ?? '',
+          row['therapist']?.toString() ?? '',
+          row['doctor']?.toString() ?? '',
+          lastVisitDisplay,
+          totalAmountDisplay,
+          docPerc,
+          docCommDisplay,
+          therapistFeesDisplay,
         ]);
       }
     } else if (reportType == 'Visit Log Report') {
@@ -2021,8 +2197,88 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
     return rows;
   }
 
+  Future<void> _exportToExcel(BuildContext context,
+      AdminFirebaseService firebaseService) async {
+    try {
+      final excel = xls.Excel.createExcel(); // Automatically creates 1st sheet
+      // Helper to add a sheet
+      void addSheet(String title, List<List<String>> rows) {
+        if (rows.isEmpty) return;
+        xls.Sheet sheet = excel[title];
+        for (final row in rows) {
+          sheet.appendRow(row);
+        }
+      }
+      // Add all report sections as sheets
+      final rRows = buildExportRows(firebaseService, 'Referrals by Doctor');
+      addSheet('Referrals by Doctor', rRows);
+      final vRows = buildExportRows(firebaseService, 'Visits by Therapist');
+      addSheet('Visits by Therapist', vRows);
+      final patRows = buildExportRows(firebaseService, 'Patient Report',
+          patientReportOverride: _localPatientReport);
+      addSheet('Patient Report', patRows);
+      final revRows = buildExportRows(firebaseService, 'Revenue Report');
+      addSheet('Revenue Report', revRows);
+      // Save to bytes
+      final bytes = excel.save();
+      // Use file_saver to download file on web
+      if (bytes != null) {
+        final fileName = 'All_Reports_${_selectedPeriod.replaceAll(
+            ' ', '_')}_${DateTime
+            .now()
+            .millisecondsSinceEpoch}.xlsx';
+        await FileSaver.instance.saveFile(
+          name: fileName,
+          bytes: Uint8List.fromList(bytes),
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Excel file exported.'),
+              backgroundColor: Colors.green),
+        );
+      } else {
+        throw Exception('Excel generation failed (empty file)');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Excel export failed: $e'),
+            backgroundColor: Colors.red),
+      );
+    }
+  }
+
   Future<void> _exportToPDF(BuildContext context,
       AdminFirebaseService firebaseService) async {
+    const int maxPages = 500;
+    const int rowsPerPage = 40;
+    const int maxRows = maxPages * rowsPerPage;
+
+    // Pre-flight: get all export-able tables to check their row counts
+    final List<List<String>> rRows = buildExportRows(
+        firebaseService, 'Referrals by Doctor');
+    final List<List<String>> vRows = buildExportRows(
+        firebaseService, 'Visits by Therapist');
+    final List<List<String>> patRows = buildExportRows(
+        firebaseService, 'Patient Report',
+        patientReportOverride: _localPatientReport);
+    final List<List<String>> revRows = buildExportRows(
+        firebaseService, 'Revenue Report');
+    final List<List<String>> vRowsLog = buildExportRows(
+        firebaseService, 'Visit Log Report');
+
+    // If too many rows in any table, show user a warning and block export
+    if (rRows.length > maxRows || vRows.length > maxRows ||
+        patRows.length > maxRows || revRows.length > maxRows ||
+        vRowsLog.length > maxRows) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Data set is too large to export at once. Please use filters or export a smaller range (max ${maxRows} rows/table, approx. 500 pages).'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -2064,7 +2320,6 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
       }
       final pageWidgets = <pw.Widget>[];
       if (_selectedReportType == 'All Reports') {
-        final rRows = buildExportRows(firebaseService, 'Referrals by Doctor');
         if (rRows.length > 1) {
           pageWidgets.add(buildSection(
             heading: 'Referrals by Doctor',
@@ -2076,7 +2331,6 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
             headerColor: PdfColor.fromHex('#E3F2FD'),
           ));
         }
-        final vRows = buildExportRows(firebaseService, 'Visits by Therapist');
         if (vRows.length > 1) {
           pageWidgets.add(buildSection(
             heading: 'Visits by Therapist',
@@ -2091,8 +2345,6 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
 
 
 
-        final patRows = buildExportRows(firebaseService, 'Patient Report',
-            patientReportOverride: _localPatientReport);
         if (patRows.length > 1) {
           pageWidgets.add(buildSection(
             heading: 'Patient Report',
@@ -2104,7 +2356,6 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
             headerColor: PdfColor.fromHex('#E0F2F1'),
           ));
         }
-        final revRows = buildExportRows(firebaseService, 'Revenue Report');
         if (revRows.length > 1) {
           pageWidgets.add(buildSection(
             heading: 'Revenue Report',
@@ -2128,8 +2379,19 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
           ),
         );
       } else {
-        final rows = buildExportRows(firebaseService, _selectedReportType,
-            patientReportOverride: _localPatientReport);
+        List<List<String>> rows;
+        if (_selectedReportType == 'Referrals by Doctor') {
+          rows = rRows;
+        } else if (_selectedReportType == 'Visits by Therapist') {
+          rows = vRows;
+        } else if (_selectedReportType == 'Patient Report') {
+          rows = patRows;
+        } else if (_selectedReportType == 'Revenue Report') {
+          rows = revRows;
+        } else {
+          rows = buildExportRows(firebaseService, _selectedReportType,
+              patientReportOverride: _localPatientReport);
+        }
         if (rows.length > 1) {
           pdf.addPage(
             pw.MultiPage(
