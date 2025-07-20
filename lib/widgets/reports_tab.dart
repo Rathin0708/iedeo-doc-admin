@@ -1406,6 +1406,8 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
     final List<Map<String, dynamic>> patientReport =
     (raw is List) ? raw.whereType<Map<String, dynamic>>().toList() : [];
     final allVisits = firebaseService.reportData['allVisits'] as List<Map<String, dynamic>>? ?? [];
+    final allReferrals = firebaseService.reportData['allReferrals'] as List<
+        Map<String, dynamic>>? ?? [];
 
     // Build patient id to list of all visits
     Map<String, List<Map<String, dynamic>>> visitsByPatientId = {};
@@ -1433,6 +1435,17 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
       latestVisitByPatientId[pid] = latest;
     }
 
+    // DEBUG: Print all patient IDs and Referral IDs/names for inspection
+    for (final patient in patientReport) {
+      print('PATIENT: ${patient['patientId']} ${patient['patientName'] ??
+          patient['name'] ?? ''}');
+    }
+    for (final ref in allReferrals) {
+      print(
+          'REFERRAL: ${ref['patientId']} status=${ref['status']} name=${ref['patientName'] ??
+              ref['name'] ?? ''}');
+    }
+
     // --- BEGIN: patient report filtering (show ALL patients, only sum/date respect filter) ---
     final filteredRows = patientReport.where((patient) {
       if ((_selectedDoctor?.isNotEmpty ?? false) &&
@@ -1440,14 +1453,44 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
       if ((_selectedTherapist?.isNotEmpty ?? false) &&
           patient['therapist'] != _selectedTherapist) return false;
       if (_selectedStatus == 'Completed') {
-        // Use visit data to check for any completed visit
-        final pid = patient['patientId']?.toString() ?? '';
-        final visits = visitsByPatientId[pid] ?? [];
-        final hasCompleted = visits.any((v) =>
-        (v['status']?.toString().toLowerCase() ?? '') == 'completed'
-            || (v['currentStatus']?.toString().toLowerCase() ?? '') ==
-            'completed');
-        if (!hasCompleted) return false;
+        final pid = (patient['patientId'] ?? '').toString().trim();
+        final pname = (patient['patientName'] ?? patient['name'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+        // Debug prints per patient
+        print('Checking patient: ID:["$pid"] NAME:["$pname"]');
+        bool matchedById = false;
+        bool matchedByName = false;
+        final idMatch = allReferrals.any((ref) =>
+        (ref['patientId'] ?? '').toString().trim() == pid &&
+            (ref['status']?.toString().toLowerCase().trim() ?? '') ==
+                'completed');
+        if (idMatch) {
+          matchedById = true;
+        }
+        // If no id match, try name match
+        if (!matchedById && pname.isNotEmpty) {
+          matchedByName = allReferrals.any((ref) =>
+          (ref['patientName'] ?? ref['name'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase() == pname &&
+              (ref['status']?.toString().toLowerCase().trim() ?? '') ==
+                  'completed'
+          );
+        }
+        if (matchedById) {
+          print(
+              'Patient INCLUDED (matched by ID): ID:["$pid"], NAME:["$pname"]');
+        } else if (matchedByName) {
+          print(
+              'Patient INCLUDED (matched by NAME): ID:["$pid"], NAME:["$pname"]');
+        } else {
+          print(
+              'Patient filtered out (no completed referral by id or name): ID:["$pid"], NAME:["$pname"]');
+        }
+        if (!matchedById && !matchedByName) return false;
       }
       if (_selectedStatus == 'Pending' &&
           (patient['lastVisit'] != '-' && patient['lastVisit'] != null))
