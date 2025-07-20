@@ -1439,11 +1439,18 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
           patient['doctor'] != _selectedDoctor) return false;
       if ((_selectedTherapist?.isNotEmpty ?? false) &&
           patient['therapist'] != _selectedTherapist) return false;
-      if (_selectedStatus == 'Completed' &&
-          (patient['lastVisit'] == '-' || patient['lastVisit'] == null))
-        return false;
+      if (_selectedStatus == 'Completed') {
+        // Use visit data to check for any completed visit
+        final pid = patient['patientId']?.toString() ?? '';
+        final visits = visitsByPatientId[pid] ?? [];
+        final hasCompleted = visits.any((v) =>
+        (v['status']?.toString().toLowerCase() ?? '') == 'completed'
+            || (v['currentStatus']?.toString().toLowerCase() ?? '') ==
+            'completed');
+        if (!hasCompleted) return false;
+      }
       if (_selectedStatus == 'Pending' &&
-          !(patient['lastVisit'] == '-' || patient['lastVisit'] == null))
+          (patient['lastVisit'] != '-' && patient['lastVisit'] != null))
         return false;
       // Do NOT filter period here!
       return true;
