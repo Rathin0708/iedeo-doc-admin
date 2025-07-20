@@ -1490,7 +1490,7 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                     width: double.infinity,
                     child: LayoutBuilder(
                       builder: (context, constraints) {
-                        final isMobile = constraints.maxWidth < 1000;
+                        final isMobile = constraints.maxWidth < 2000;
                         final table = DataTable(
                           columns: const [
                             DataColumn(label: Text('Patient Name')),
@@ -1661,8 +1661,12 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                         if (isMobile) {
                           return SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
-                            child: table,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minWidth: 1400), // adjust 1000 as fits your widest table
+                              child: table,
+                            ),
                           );
+                          ;
                         } else {
                           return table;
                         }
