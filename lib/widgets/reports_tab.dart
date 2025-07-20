@@ -1393,68 +1393,45 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
   bool _showingAllPatients = false;
   
   Widget _buildPatientReport(AdminFirebaseService firebaseService) {
+    // Type-safe, always get expected structure
+    final raw = firebaseService.reportData['patientReport'];
+    final List<Map<String, dynamic>> patientReport =
+    (raw is List) ? raw.whereType<Map<String, dynamic>>().toList() : [];
     final allVisits = firebaseService.reportData['allVisits'] as List<Map<String, dynamic>>? ?? [];
-    // First filter by date period
-    final dateFiltered = _localPatientReport.where((patient) {
-      final lastVisit = _parseVisitDate(patient['lastVisit']);
-      if (lastVisit == null) return true; // Fallback
-      final range = _getPeriodRange(_selectedPeriod);
-      return !lastVisit.isBefore(range[0]) && lastVisit.isBefore(range[1]);
-    }).toList();
 
-    // Then apply additional filters
-    final patientsFiltered = dateFiltered.where((patient) {
-      // Filter by doctor if selected
-      if (_selectedDoctor != null) {
-        final doctorName = patient['doctor']?.toString() ?? '';
-        if (doctorName.isEmpty || doctorName != _selectedDoctor) {
-          return false;
-        }
-      }
-
-      // Filter by therapist if selected
-      if (_selectedTherapist != null) {
-        final therapistName = patient['therapist']?.toString() ?? '';
-        if (therapistName.isEmpty || therapistName != _selectedTherapist) {
-          return false;
-        }
-      }
-
-      // Filter by status if selected
-      if (_selectedStatus != null) {
-        final lastVisit = patient['lastVisit']?.toString() ?? '';
-
-        if (_selectedStatus == 'Completed') {
-          // Consider a patient with a visit as 'Completed'
-          return lastVisit != 'Not visited yet';
-        } else if (_selectedStatus == 'Pending') {
-          // Consider a patient without a visit as 'Pending'
-          return lastVisit == 'Not visited yet';
-        }
-      }
-
-      return true;
-    }).toList();
-
-    // Helper: Map patientId to latest visit object in allVisits
-    Map<String, Map<String, dynamic>> latestVisitByPatientId = {};
+    // Build patient id to list of all visits
+    Map<String, List<Map<String, dynamic>>> visitsByPatientId = {};
     for (final v in allVisits) {
       final pid = v['patientId']?.toString() ?? '';
-      final visitDate = _parseVisitDate(v['visitDate']);
-      if (pid.isEmpty || visitDate == null) continue;
-      if (!latestVisitByPatientId.containsKey(pid) ||
-          visitDate.isAfter(_parseVisitDate(latestVisitByPatientId[pid]!['visitDate']) ?? DateTime(1900))) {
-        latestVisitByPatientId[pid] = v;
-      }
+      if (pid.isEmpty) continue;
+      visitsByPatientId.putIfAbsent(pid, () => []).add(v);
     }
 
-    // Determine if we need to show the View More button
-    final hasMorePatients = patientsFiltered.length > _patientDisplayLimit;
-    final patientsToDisplay = hasMorePatients && !_showingAllPatients
-        ? patientsFiltered.take(_patientDisplayLimit).toList()
-        : patientsFiltered;
+    // For each patient: latest visit for financials & date (no date filtering now!)
+    Map<String, Map<String, dynamic>?> latestVisitByPatientId = {};
+    for (final patient in patientReport) {
+      final pid = patient['patientId']?.toString() ?? '';
+      final visList = visitsByPatientId[pid] ?? [];
+      // Get latest
+      Map<String, dynamic>? latest;
+      for (final v in visList) {
+        final visitDate = _parseVisitDate(v['visitDate']);
+        if (visitDate == null) continue;
+        if (latest == null || visitDate.isAfter(
+            _parseVisitDate(latest['visitDate']) ?? DateTime(1900))) {
+          latest = v;
+        }
+      }
+      latestVisitByPatientId[pid] = latest;
+    }
 
-    bool debugMode = true; // Set to true for extra debugging UI
+    // Robust table: always display all referrals as rows
+    final patientsToDisplay = patientReport;
+    final hasMorePatients = patientsToDisplay.length > _patientDisplayLimit;
+    final visibleRows = hasMorePatients && !_showingAllPatients
+        ? patientsToDisplay.take(_patientDisplayLimit).toList()
+        : patientsToDisplay;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 20),
       child: Padding(
@@ -1474,7 +1451,6 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                     color: Colors.grey[800],
                   ),
                 ),
-                // Manual refresh button if needed
                 const Spacer(),
                 IconButton(
                   icon: Icon(Icons.refresh, color: Colors.teal[700], size: 20),
@@ -1484,26 +1460,12 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
               ],
             ),
             const SizedBox(height: 12),
-            if (!_patientReportLoaded) ...[
-              // Show progress while loading/refetching patient data only
-              const Center(child: CircularProgressIndicator()),
-              const SizedBox(height: 10),
-            ],
-            if (debugMode) ...[
-              // Shows patient report list length for quick checking
-              Text('Patient report data count: ${patientsFiltered.length}',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-              // List out the first patient data map for visual debugging
-              if (patientsFiltered.isNotEmpty)
-                Text('First patient data: ${patientsFiltered.first.toString()}',
-                    style: TextStyle(fontSize: 11, color: Colors.grey[600]))
-              else
-                Text('No patient data received from service',
-                    style: TextStyle(fontSize: 11, color: Colors.red)),
-              const Divider(),
-            ],
-            if (_patientReportLoaded && patientsFiltered.isEmpty)
-            // Graceful message for empty state
+            if (!_patientReportLoaded)
+              ...[
+                const Center(child: CircularProgressIndicator()),
+                const SizedBox(height: 10),
+              ],
+            if (_patientReportLoaded && visibleRows.isEmpty)
               Container(
                 padding: const EdgeInsets.all(20),
                 child: Center(
@@ -1532,19 +1494,40 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                             DataColumn(label: Text('Doctor Commission')),
                             DataColumn(label: Text('Therapist Amount')),
                           ],
-                          rows: patientsToDisplay.map((patient) {
+                          rows: visibleRows.map((patient) {
+                            // Sanitize and handle any type inconsistencies gracefully (robustness)
                             final patientId = patient['patientId']?.toString() ?? '';
                             final latest = latestVisitByPatientId[patientId];
+
+                            String docPerc = latest?['doctorCommissionPercent']
+                                ?.toString() ??
+                                patient['doctorCommissionPercent']
+                                    ?.toString() ?? '-';
+                            if (docPerc != '-' && num.tryParse(docPerc) != null)
+                              docPerc = '${docPerc}%';
+
                             String amount = latest?['amount']?.toString() ?? '-';
-                            String docPerc = latest?['doctorCommissionPercent']?.toString() ?? '-';
                             String docComm = latest?['doctorCommissionAmount']?.toString() ?? '-';
                             String therAmt = latest?['therapistFeeAmount']?.toString() ?? '-';
-                            if (docPerc != '-' && num.tryParse(docPerc) != null) docPerc = '${docPerc}%';
+
+                            String lastVisitDisplay = '-';
+                            if (latest != null &&
+                                (latest['visitDate'] ?? '') != '') {
+                              lastVisitDisplay = latest['visitDate'].toString();
+                            } else if (patient['lastVisit'] != null &&
+                                patient['lastVisit']
+                                    .toString()
+                                    .isNotEmpty) {
+                              lastVisitDisplay =
+                                  patient['lastVisit'].toString();
+                            }
                             return DataRow(cells: [
                               DataCell(Text(getDisplayPatientName(patient))),
-                              DataCell(Text(patient['therapist'] ?? 'Unknown')),
-                              DataCell(Text(patient['doctor'] ?? 'Unknown')),
-                              DataCell(Text(patient['lastVisit'] ?? '-')),
+                              DataCell(Text(patient['therapist']?.toString() ??
+                                  'Unknown')),
+                              DataCell(Text(
+                                  patient['doctor']?.toString() ?? 'Unknown')),
+                              DataCell(Text(lastVisitDisplay)),
                               DataCell(Text(amount)),
                               DataCell(Text(docPerc)),
                               DataCell(Text(docComm)),
@@ -1575,7 +1558,8 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                         child: Text(
                           _showingAllPatients
                               ? 'Show Less'
-                              : 'View More (${patientsFiltered.length - _patientDisplayLimit} more)',
+                              : 'View More (${patientsToDisplay.length -
+                              _patientDisplayLimit} more)',
                           style: TextStyle(color: Colors.teal[700]),
                         ),
                       ),

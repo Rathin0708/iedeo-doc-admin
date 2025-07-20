@@ -11,6 +11,7 @@ class AdminFirebaseService extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
+
   List<AdminUser> _pendingUsers = [];
   List<AdminUser> _allUsers = [];
   List<AdminPatient> _unassignedPatients = [];
@@ -983,6 +984,7 @@ class AdminFirebaseService extends ChangeNotifier {
         'patientId': patientId,
         'type': 'new_assignment',
         'message': 'New patient has been assigned to you',
+        'doctorCommissionPercent': doctorCommissionPercent, // Add commission %
         'isRead': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -1037,143 +1039,23 @@ class AdminFirebaseService extends ChangeNotifier {
   Future<void> fetchPatientReport() async {
     _setLoading(true);
     try {
-      // First, get all visits to find the latest visit date for each patient
-      QuerySnapshot visitsSnapshot = await _firestore.collection('visits').get();
-      
-      // Create a map to store the latest visit for each patient
-      Map<String, dynamic> latestVisits = {};
-      
-      // Process all visits to find the latest visit date for each patient
-      for (var visitDoc in visitsSnapshot.docs) {
-        final visitData = visitDoc.data() as Map<String, dynamic>;
-        final patientId = visitData['patientId']?.toString() ?? '';
-        
-        if (patientId.isNotEmpty) {
-          DateTime? visitDate;
-          
-          // Extract visit date
-          if (visitData.containsKey('visitDate') && visitData['visitDate'] != null) {
-            if (visitData['visitDate'] is Timestamp) {
-              visitDate = (visitData['visitDate'] as Timestamp).toDate();
-            } else {
-              try {
-                visitDate = DateTime.parse(visitData['visitDate'].toString());
-              } catch (e) {
-                // Skip if date can't be parsed
-                continue;
-              }
-            }
-          }
-          
-          // Only update if this visit is more recent than any previously found visit for this patient
-          if (visitDate != null) {
-            if (!latestVisits.containsKey(patientId) || 
-                visitDate.isAfter(latestVisits[patientId]['date'])) {
-              latestVisits[patientId] = {
-                'date': visitDate,
-                'dateStr': '${visitDate.year}-${visitDate.month.toString().padLeft(2, '0')}-${visitDate.day.toString().padLeft(2, '0')}',
-                'therapistId': visitData['therapistId'],
-                'doctorId': visitData['doctorId'],
-              };
-            }
-          }
-        }
-      }
-      
-      print('Found latest visits for ${latestVisits.length} patients');
-      
-      // Then, get all patients from referrals collection
       QuerySnapshot referralsSnapshot = await _firestore.collection('referrals').get();
-      
-      // Create a map of patient IDs to their details
-      Map<String, Map<String, dynamic>> patientDetails = {};
-      
-      // Extract patient details from referrals
+      List<Map<String, dynamic>> patientReport = [];
       for (var doc in referralsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
-        final docId = doc.id;
-        
-        // Get patient name - use 'name' field directly as seen in Firebase
-        String patientName = '';
-        if (data.containsKey('name') && data['name'] != null && data['name'].toString().trim().isNotEmpty) {
-          patientName = data['name'].toString().trim();
-        } else if (data.containsKey('patientName') && data['patientName'] != null && data['patientName'].toString().trim().isNotEmpty) {
-          patientName = data['patientName'].toString().trim();
-        }
-        
-        // Store patient details
-        patientDetails[docId] = {
-          'name': patientName,
-          'therapistName': data['therapistName'] ?? '',
-          'doctorName': data['doctorName'] ?? '',
-        };
-      }
-      
-      // Now build the patient report by combining referrals and visits data
-      List<Map<String, dynamic>> patientReport = [];
-      
-      // First, add all patients from referrals collection
-      // This ensures all patients are included, even those without visits
-      for (var entry in patientDetails.entries) {
-        final referralId = entry.key;
-        final details = entry.value;
-        final referralData = referralsSnapshot.docs
-            .firstWhere((doc) => doc.id == referralId)
-            .data() as Map<String, dynamic>;
-        
-        // Get patient ID from referral
-        String patientId = referralId; // Default to document ID
-        if (referralData.containsKey('patientId') && 
-            referralData['patientId'] != null && 
-            referralData['patientId'].toString().trim().isNotEmpty) {
-          patientId = referralData['patientId'].toString().trim();
-        }
-        
-        // Check if this patient has a visit
-        String lastVisitDate = 'Not visited yet';
-        if (latestVisits.containsKey(patientId)) {
-          lastVisitDate = latestVisits[patientId]['dateStr'];
-        }
-        
-        // Add to the patient report
+        // Show all referral data (ADMIN ASSIGNMENT DATA ONLY)
         patientReport.add({
-          'patientName': details['name'],
-          'therapist': details['therapistName'],
-          'doctor': details['doctorName'],
-          'lastVisit': lastVisitDate,
-          'patientId': patientId,
+          'patientId': doc.id,
+          'patientName': data['name'] ?? data['patientName'] ?? '-',
+          'therapist': data['therapistName'] ?? '-',
+          'doctor': data['doctorName'] ?? '-',
+          'doctorCommissionPercent': data['doctorCommissionPercent'] ?? '-',
+          'lastVisit': data['lastVisitDate'] != null ? data['lastVisitDate']
+              .toString() : '-',
+          // You can add more fields as needed
         });
-        
-        print('Added patient from referrals: ${details['name']} (ID: $patientId), Last visit: $lastVisitDate');
       }
-      
-      // Then add any patients from visits that weren't in referrals
-      latestVisits.forEach((patientId, visitInfo) {
-        // Check if this patient was already added from referrals
-        bool patientExists = patientReport.any((p) => p['patientId'] == patientId);
-        
-        if (!patientExists) {
-          // Create a minimal record for patients that only exist in visits
-          patientReport.add({
-            'patientName': 'Unknown',
-            'therapist': '',
-            'doctor': '',
-            'lastVisit': visitInfo['dateStr'],
-            'patientId': patientId,
-          });
-          
-          print('Added patient from visits only: Unknown (ID: $patientId), Last visit: ${visitInfo['dateStr']}');
-        }
-      });
-      
-      // Set the report data
       _reportData['patientReport'] = patientReport;
-      
-      // Debug output
-      print('Patient report data count: ${_reportData['patientReport']?.length}');
-      if (_reportData['patientReport']?.isNotEmpty == true) {
-        print('First patient data: ${_reportData['patientReport']?[0]}');
-      }
     } catch (e) {
       print('Error fetching patient report: $e');
       _reportData['patientReport'] = [];
