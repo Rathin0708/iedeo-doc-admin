@@ -1557,7 +1557,21 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                                   return '-';
                                 })(),
                               )),
-                              DataCell(Text(therAmt)),
+                              DataCell(
+                                  (() {
+                                    final totalAmountRaw = (patient['totalAmount'] ?? '').toString().replaceAll('₹', '').replaceAll(',', '').trim();
+                                    final percRaw = (patient['doctorCommissionPercent'] ?? '').toString().replaceAll('%', '').trim();
+                                    final totalAmount = double.tryParse(totalAmountRaw);
+                                    final percentNumeric = double.tryParse(percRaw);
+                                    if (totalAmount != null && percentNumeric != null) {
+                                      double commission = totalAmount * (percentNumeric / 100.0);
+                                      double therapistFees = totalAmount - commission;
+                                      return Text('₹${therapistFees.toStringAsFixed(2)}');
+                                    }
+                                    return const Text('-');
+                                  })()
+                              ),
+
                             ]);
                           }).toList(),
                         );
