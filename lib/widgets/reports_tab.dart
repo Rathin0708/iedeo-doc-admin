@@ -1433,12 +1433,27 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
       latestVisitByPatientId[pid] = latest;
     }
 
-    // Robust table: always display all referrals as rows
-    final patientsToDisplay = patientReport;
-    final hasMorePatients = patientsToDisplay.length > _patientDisplayLimit;
+    // --- BEGIN: patient report filtering (show ALL patients, only sum/date respect filter) ---
+    final filteredRows = patientReport.where((patient) {
+      if ((_selectedDoctor?.isNotEmpty ?? false) &&
+          patient['doctor'] != _selectedDoctor) return false;
+      if ((_selectedTherapist?.isNotEmpty ?? false) &&
+          patient['therapist'] != _selectedTherapist) return false;
+      if (_selectedStatus == 'Completed' &&
+          (patient['lastVisit'] == '-' || patient['lastVisit'] == null))
+        return false;
+      if (_selectedStatus == 'Pending' &&
+          !(patient['lastVisit'] == '-' || patient['lastVisit'] == null))
+        return false;
+      // Do NOT filter period here!
+      return true;
+    }).toList();
+
+    final hasMorePatients = filteredRows.length > _patientDisplayLimit;
     final visibleRows = hasMorePatients && !_showingAllPatients
-        ? patientsToDisplay.take(_patientDisplayLimit).toList()
-        : patientsToDisplay;
+        ? filteredRows.take(_patientDisplayLimit).toList()
+        : filteredRows;
+    // --- END: patient report filtering ---
 
     return Card(
       margin: const EdgeInsets.only(bottom: 20),
@@ -1503,20 +1518,122 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                             DataColumn(label: Text('Therapist Fees')),
                           ],
                           rows: visibleRows.map((patient) {
-                            // Sanitize and handle any type inconsistencies gracefully (robustness)
                             final patientId = patient['patientId']?.toString() ?? '';
-                            final latest = latestVisitByPatientId[patientId];
 
-                            String docPerc = latest?['doctorCommissionPercent']
-                                ?.toString() ??
-                                patient['doctorCommissionPercent']
-                                    ?.toString() ?? '-';
-                            if (docPerc != '-' && num.tryParse(docPerc) != null)
-                              docPerc = '${docPerc}%';
+                            // --- Period filter for financials ---
+                            final periodRange = _getPeriodRange(
+                                _selectedPeriod);
+                            final periodStart = periodRange[0];
+                            final periodEnd = periodRange[1];
+                            final visitsInPeriod = (visitsByPatientId[patientId] ??
+                                []).where((visit) {
+                              final dt = _parseVisitDate(visit['visitDate']);
+                              return dt != null && !dt.isBefore(periodStart) &&
+                                  dt.isBefore(periodEnd);
+                            }).toList();
+                            Map<String, dynamic>? latest;
+                            for (final v in visitsInPeriod) {
+                              final visitDate = _parseVisitDate(v['visitDate']);
+                              if (visitDate == null) continue;
+                              if (latest == null || visitDate.isAfter(
+                                  _parseVisitDate(latest['visitDate']) ??
+                                      DateTime(1900))) {
+                                latest = v;
+                              }
+                            }
 
-                            String therAmt = latest?['therapistFeeAmount']?.toString() ?? '-';
+                            // For docPerc, commission, etc: fallback to referral assignment if latest is null
+                            String docPerc = '-';
+                            if (latest != null &&
+                                latest['doctorCommissionPercent'] != null) {
+                              docPerc =
+                                  latest['doctorCommissionPercent'].toString();
+                              if (docPerc != '-' && !docPerc.contains('%'))
+                                docPerc = '$docPerc%';
+                            } else
+                            if (patient['doctorCommissionPercent'] != null) {
+                              docPerc =
+                                  patient['doctorCommissionPercent'].toString();
+                              if (docPerc != '-' && !docPerc.contains('%'))
+                                docPerc = '$docPerc%';
+                            }
 
-                            // Show Last Visit as 12h am/pm if today and visitTime present, else as dd-MM-yyyy. Robust parsing
+                            // For Total Amount, sum all visit amounts in period for this patient
+                            double sum = 0;
+                            for (var v in visitsInPeriod) {
+                              final amtRaw = v['amount'];
+                              double? val;
+                              if (amtRaw is num)
+                                val = amtRaw.toDouble();
+                              else if (amtRaw is String && amtRaw
+                                  .trim()
+                                  .isNotEmpty)
+                                val = double.tryParse(
+                                    amtRaw.replaceAll('₹', '').replaceAll(
+                                        ',', '').trim());
+                              if (val != null) sum += val;
+                            }
+                            String totalAmountDisplay = sum > 0 ? '₹${sum
+                                .toStringAsFixed(2)}' : '-';
+                            if (sum <= 0) {
+                              if (latest != null && latest['amount'] != null &&
+                                  latest['amount'].toString() != '-') {
+                                totalAmountDisplay = '₹${latest['amount']}';
+                              } else if (patient['amount'] != null &&
+                                  patient['amount'] != '-') {
+                                totalAmountDisplay = '₹${patient['amount']}';
+                              } else if (patient['estimatedCost'] != null &&
+                                  patient['estimatedCost'] != '-') {
+                                totalAmountDisplay =
+                                '₹${patient['estimatedCost']}';
+                              }
+                            }
+
+                            // Doctor commission
+                            String docCommDisplay = '-';
+                            {
+                              final totalAmountRaw = totalAmountDisplay
+                                  .replaceAll('₹', '')
+                                  .replaceAll(',', '')
+                                  .trim();
+                              final percRaw = docPerc
+                                  .replaceAll('%', '')
+                                  .trim();
+                              final totalAmount = double.tryParse(
+                                  totalAmountRaw);
+                              final percentNumeric = double.tryParse(percRaw);
+                              if (totalAmount != null &&
+                                  percentNumeric != null) {
+                                double commission = totalAmount *
+                                    (percentNumeric / 100.0);
+                                docCommDisplay =
+                                '₹${commission.toStringAsFixed(2)}';
+                              }
+                            }
+                            // Therapist fees
+                            String therapistFeesDisplay = '-';
+                            {
+                              final totalAmountRaw = totalAmountDisplay
+                                  .replaceAll('₹', '')
+                                  .replaceAll(',', '')
+                                  .trim();
+                              final percRaw = docPerc
+                                  .replaceAll('%', '')
+                                  .trim();
+                              final totalAmount = double.tryParse(
+                                  totalAmountRaw);
+                              final percentNumeric = double.tryParse(percRaw);
+                              if (totalAmount != null &&
+                                  percentNumeric != null) {
+                                double commission = totalAmount *
+                                    (percentNumeric / 100.0);
+                                double therapistFees = totalAmount - commission;
+                                therapistFeesDisplay =
+                                '₹${therapistFees.toStringAsFixed(2)}';
+                              }
+                            }
+
+                            // Show Last Visit as before
                             String lastVisitDisplay = '-';
                             DateTime? lastVisitDt;
                             String? lastVisitTime;
@@ -1568,39 +1685,7 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                                     .padLeft(2, '0')}-${lastVisitDt.year}';
                               }
                             } else {
-                              final lastVisitField = patient['lastVisit'];
-                              if (lastVisitField != null &&
-                                  lastVisitField != '-' && lastVisitField
-                                  .toString()
-                                  .isNotEmpty) {
-                                try {
-                                  DateTime? parsed;
-                                  if (lastVisitField is DateTime)
-                                    parsed = lastVisitField;
-                                  else if (lastVisitField.toString().contains(
-                                      'seconds=')) {
-                                    final match = RegExp(r'seconds=(\d+)')
-                                        .firstMatch(lastVisitField.toString());
-                                    if (match != null) parsed =
-                                        DateTime.fromMillisecondsSinceEpoch(
-                                            int.parse(match.group(1)!) * 1000);
-                                  } else
-                                    parsed = DateTime.tryParse(
-                                        lastVisitField.toString());
-                                  if (parsed != null) {
-                                    lastVisitDisplay =
-                                    '${parsed.day.toString().padLeft(
-                                        2, '0')}-${parsed.month
-                                        .toString()
-                                        .padLeft(2, '0')}-${parsed.year}';
-                                  } else {
-                                    lastVisitDisplay =
-                                        lastVisitField.toString();
-                                  }
-                                } catch (_) {
-                                  lastVisitDisplay = lastVisitField.toString();
-                                }
-                              }
+                              lastVisitDisplay = '-';
                             }
                             return DataRow(cells: [
                               DataCell(Text(getDisplayPatientName(patient))),
@@ -1609,52 +1694,10 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                               DataCell(Text(
                                   patient['doctor']?.toString() ?? 'Unknown')),
                               DataCell(Text(lastVisitDisplay)),
-                              DataCell(Text(
-                                  patient['totalAmount'] != null &&
-                                      patient['totalAmount'] != '-'
-                                      ? '₹${patient['totalAmount']}'
-                                      : '-' // Show as currency
-                              )),
+                              DataCell(Text(totalAmountDisplay)),
                               DataCell(Text(docPerc)),
-                              DataCell(Text(
-                                // Show Doctor Commission as totalAmount × doctorCommissionPercent / 100, formatted
-                                (() {
-                                  final totalAmountRaw = (patient['totalAmount'] ??
-                                      '')
-                                      .toString()
-                                      .replaceAll('₹', '')
-                                      .replaceAll(',', '')
-                                      .trim();
-                                  final percRaw = (patient['doctorCommissionPercent'] ??
-                                      '').toString().replaceAll('%', '').trim();
-                                  final totalAmount = double.tryParse(
-                                      totalAmountRaw);
-                                  final percentNumeric = double.tryParse(
-                                      percRaw);
-                                  if (totalAmount != null &&
-                                      percentNumeric != null) {
-                                    double commission = totalAmount *
-                                        (percentNumeric / 100.0);
-                                    return '₹${commission.toStringAsFixed(2)}';
-                                  }
-                                  return '-';
-                                })(),
-                              )),
-                              DataCell(
-                                  (() {
-                                    final totalAmountRaw = (patient['totalAmount'] ?? '').toString().replaceAll('₹', '').replaceAll(',', '').trim();
-                                    final percRaw = (patient['doctorCommissionPercent'] ?? '').toString().replaceAll('%', '').trim();
-                                    final totalAmount = double.tryParse(totalAmountRaw);
-                                    final percentNumeric = double.tryParse(percRaw);
-                                    if (totalAmount != null && percentNumeric != null) {
-                                      double commission = totalAmount * (percentNumeric / 100.0);
-                                      double therapistFees = totalAmount - commission;
-                                      return Text('₹${therapistFees.toStringAsFixed(2)}');
-                                    }
-                                    return const Text('-');
-                                  })()
-                              ),
-
+                              DataCell(Text(docCommDisplay)),
+                              DataCell(Text(therapistFeesDisplay)),
                             ]);
                           }).toList(),
                         );
@@ -1685,7 +1728,7 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                         child: Text(
                           _showingAllPatients
                               ? 'Show Less'
-                              : 'View More (${patientsToDisplay.length -
+                              : 'View More (${filteredRows.length -
                               _patientDisplayLimit} more)',
                           style: TextStyle(color: Colors.teal[700]),
                         ),
