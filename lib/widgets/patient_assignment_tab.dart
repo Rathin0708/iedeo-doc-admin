@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
 import 'package:flutter_image_compress/flutter_image_compress.dart'; // For image compression
 import 'package:flutter/foundation.dart';
+import 'dart:io'; // For SocketException
 import 'package:syncfusion_flutter_datepicker/datepicker.dart';
 import '../services/admin_firebase_service.dart';
 import '../models/admin_patient.dart';
@@ -2045,18 +2046,18 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
 
   Future<void> _assignPatient(BuildContext context, AdminPatient patient,
       AdminFirebaseService firebaseService) async {
-    // Show loading
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => const Center(child: CircularProgressIndicator()),
-    );
+    double commissionPercent = 20.0; // Default
 
+    // Improved network error handling for getAvailableTherapists and assignment actions
     try {
       final therapists = await firebaseService.getAvailableTherapists();
-      Navigator.of(context).pop(); // Close loading
+
+      // Check if widget is still mounted after await
+      if (!mounted) return;
 
       if (therapists.isEmpty) {
+        // Only show Snackbar if still mounted
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('No approved therapists available'),
@@ -2066,62 +2067,159 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
         return;
       }
 
-      final selectedTherapist = await showDialog<AdminUser>(
+      // Show dialog to select therapist and enter commission percent
+      final assignmentResult = await showDialog<Map<String, dynamic>>(
         context: context,
         builder: (ctx) =>
-            AlertDialog(
-              title: Text('Assign ${patient.patientName}'),
-              content: SizedBox(
-                width: double.maxFinite,
-                height: 300,
-                child: ListView.builder(
-                  itemCount: therapists.length,
-                  itemBuilder: (context, index) {
-                    final therapist = therapists[index];
-                    return Card(
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: Colors.green[100],
-                          child: Icon(Icons.healing, color: Colors.green[700]),
+            StatefulBuilder(
+              builder: (ctx, setDialogState) =>
+                  AlertDialog(
+                    title: Text('Assign ${patient.patientName}'),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Select Therapist:'),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: 400,
+                          height: 200,
+                          child: ListView.builder(
+                            itemCount: therapists.length,
+                            itemBuilder: (context, index) {
+                              final therapist = therapists[index];
+                              return Card(
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: Colors.green[100],
+                                    child: Icon(Icons.healing,
+                                        color: Colors.green[700]),
+                                  ),
+                                  title: Text(
+                                      therapist.name, style: const TextStyle(
+                                      fontWeight: FontWeight.w600)),
+                                  subtitle: Text(therapist.specialization),
+                                  onTap: () {
+                                    Navigator.of(ctx).pop({
+                                      'therapist': therapist,
+                                      'commissionPercent': commissionPercent,
+                                    });
+                                  },
                         ),
-                        title: Text(therapist.name, style: const TextStyle(
-                            fontWeight: FontWeight.w600)),
-                        subtitle: Text(therapist.specialization),
-                        onTap: () => Navigator.of(ctx).pop(therapist),
+                      );
+                    },
+                  ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            const Text('Doctor Commission (%):',
+                                style: TextStyle(fontWeight: FontWeight.w600)),
+                            const SizedBox(width: 10),
+                            SizedBox(
+                              width: 80,
+                              child: TextFormField(
+                                initialValue: commissionPercent.toStringAsFixed(
+                                    0),
+                                keyboardType: TextInputType.number,
+                                onChanged: (val) {
+                                  double p = double.tryParse(val) ?? 20.0;
+                                  if (p < 0) p = 0;
+                                  if (p > 100) p = 100;
+                                  setDialogState(() => commissionPercent = p);
+                        },
+                        decoration: const InputDecoration(
+                            suffixText: '%', border: OutlineInputBorder()),
                       ),
-                    );
-                  },
+                    ),
+                  ],
                 ),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.of(ctx).pop(),
-                    child: const Text('Cancel'))
-              ],
-            ),
+                      ],
+                    ),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.of(ctx).pop(),
+                          child: const Text('Cancel')),
+            ],
+          ),
+        ),
       );
 
-      if (selectedTherapist != null) {
-        final success = await firebaseService.assignPatientToTherapist(
-          patientId: patient.id,
-          therapistId: selectedTherapist.uid,
-          therapistName: selectedTherapist.name,
-        );
+      // Always check mounted after async showDialog
+      if (!mounted) return;
 
-        if (success) {
+      if (assignmentResult != null && assignmentResult['therapist'] != null) {
+        final therapist = assignmentResult['therapist'] as AdminUser;
+        final doctorCommissionPercent = assignmentResult['commissionPercent'] as double;
+
+        // Show loading
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => const Center(child: CircularProgressIndicator()),
+        );
+        // No await above, so no mounted check needed here
+
+        try {
+          final success = await firebaseService.assignPatientToTherapist(
+            patientId: patient.id,
+            therapistId: therapist.uid,
+            therapistName: therapist.name,
+            doctorCommissionPercent: doctorCommissionPercent,
+          );
+
+          // After an async call, always check if the widget is still mounted before using context.
+          if (!mounted) return;
+
+          Navigator.of(context).pop(); // Close loading
+
+          if (success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('${patient.patientName} assigned to ${therapist
+                    .name} (Doctor commission: $doctorCommissionPercent%)'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } on SocketException catch (_) {
+          // Show network-is-unreachable specific message
+          if (!mounted) return;
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Network is unreachable. Please check your internet connection and try again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        } catch (e) {
+          if (!mounted) return;
+          Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                  '${patient.patientName} assigned to ${selectedTherapist
-                      .name}'),
-              backgroundColor: Colors.green,
+              content: Text('Error: ${e.toString()}'),
+              backgroundColor: Colors.red,
             ),
           );
         }
       }
-    } catch (e) {
-      Navigator.of(context).pop(); // Close loading if still open
+    } on SocketException catch (_) {
+      // Outermost: getAvailableTherapists could also fail for network
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        const SnackBar(
+          content: Text(
+              'Network is unreachable. Please check your internet connection and try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }

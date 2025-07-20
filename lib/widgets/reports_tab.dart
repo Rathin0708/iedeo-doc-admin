@@ -1022,7 +1022,31 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
     final dataF = firebaseService.reportData;
     final rawReferrals = dataF['allReferrals'] as List<Map<String, dynamic>>? ?? [];
     final allReferrals = dataF['referralsByDoctor'] as List<Map<String, dynamic>>? ?? [];
-    
+    final allVisits = dataF['allVisits'] as List<Map<String, dynamic>>? ?? [];
+
+    // --- BEGIN NEW LOGIC ---
+    // Map to quickly sum doctor commission per doctor for the selected period
+    final Map<String, double> doctorCommissions = {};
+    final periodRange = _getPeriodRange(_selectedPeriod);
+    final periodStart = periodRange[0];
+    final periodEnd = periodRange[1];
+    for (final visit in allVisits) {
+      // Get doctor name flexibly from possible keys
+      final doctorName = visit['doctorName'] ?? visit['refDoctorName'] ??
+          visit['doctor'] ?? '';
+      // Only sum for visits in the selected period (as per current report filters)
+      final visitDate = _parseVisitDate(visit['visitDate']);
+      if (doctorName != '' && visitDate != null &&
+          !visitDate.isBefore(periodStart) && visitDate.isBefore(periodEnd)) {
+        // doctorCommissionAmount is expected to be present from visit logging
+        final amt = double.tryParse(
+            visit['doctorCommissionAmount']?.toString() ?? '0') ?? 0.0;
+        doctorCommissions[doctorName] =
+            (doctorCommissions[doctorName] ?? 0.0) + amt;
+      }
+    }
+    // --- END NEW LOGIC ---
+
     // Create a special list for today's referrals if needed
     List<Map<String, dynamic>> referralsToUse;
     
@@ -1178,15 +1202,14 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: Colors.blue[200]!),
                     ),
-                    child: Expanded(
-                      child: Flexible(
-                        child: Text(
-                          'Today: $totalReferrals Total, $totalCompleted Completed, $totalPending Pending',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue[800],
-                          ),
-                        ),
+                    // The following fixes the assertion error: use only Expanded OR Flexible, not both.
+                    // Replacing 'Expanded(child: Flexible(child: ...))' or 'Flexible(child: Expanded(child: ...))' with only direct Text
+                    // as only one parent data widget is needed
+                    child: Text(
+                      'Today: $totalReferrals Total, $totalCompleted Completed, $totalPending Pending',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue[800],
                       ),
                     ),
                   ),
@@ -1223,14 +1246,22 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                             DataColumn(label: Text(_selectedPeriod == 'Today'
                                 ? 'Today\'s Pending'
                                 : 'Pending')),
+                            // --- NEW COLUMN FOR DOCTOR REVENUE ---
+                            const DataColumn(label: Text('Doctor Revenue (₹)')),
                           ],
                           rows: doctorsToDisplay.map((doctor) {
+                            final doctorName = doctor['doctorName'] ??
+                                'Unknown';
+                            // Output revenue for this doctor, formatted to 2 decimal places
+                            final revenue = doctorCommissions[doctorName]
+                                ?.toStringAsFixed(2) ?? '0.00';
                             return DataRow(cells: [
-                              DataCell(Text(doctor['doctorName'] ?? 'Unknown')),
+                              DataCell(Text(doctorName)),
                               DataCell(
                                   Text('${doctor['totalReferrals'] ?? 0}')),
                               DataCell(Text('${doctor['completed'] ?? 0}')),
                               DataCell(Text('${doctor['pending'] ?? 0}')),
+                              DataCell(Text('₹$revenue')),
                             ]);
                           }).toList(),
                         );
@@ -1362,6 +1393,7 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
   bool _showingAllPatients = false;
   
   Widget _buildPatientReport(AdminFirebaseService firebaseService) {
+    final allVisits = firebaseService.reportData['allVisits'] as List<Map<String, dynamic>>? ?? [];
     // First filter by date period
     final dateFiltered = _localPatientReport.where((patient) {
       final lastVisit = _parseVisitDate(patient['lastVisit']);
@@ -1369,7 +1401,7 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
       final range = _getPeriodRange(_selectedPeriod);
       return !lastVisit.isBefore(range[0]) && lastVisit.isBefore(range[1]);
     }).toList();
-    
+
     // Then apply additional filters
     final patientsFiltered = dateFiltered.where((patient) {
       // Filter by doctor if selected
@@ -1379,7 +1411,7 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
           return false;
         }
       }
-      
+
       // Filter by therapist if selected
       if (_selectedTherapist != null) {
         final therapistName = patient['therapist']?.toString() ?? '';
@@ -1387,11 +1419,11 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
           return false;
         }
       }
-      
+
       // Filter by status if selected
       if (_selectedStatus != null) {
         final lastVisit = patient['lastVisit']?.toString() ?? '';
-        
+
         if (_selectedStatus == 'Completed') {
           // Consider a patient with a visit as 'Completed'
           return lastVisit != 'Not visited yet';
@@ -1400,17 +1432,28 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
           return lastVisit == 'Not visited yet';
         }
       }
-      
+
       return true;
     }).toList();
-    
+
+    // Helper: Map patientId to latest visit object in allVisits
+    Map<String, Map<String, dynamic>> latestVisitByPatientId = {};
+    for (final v in allVisits) {
+      final pid = v['patientId']?.toString() ?? '';
+      final visitDate = _parseVisitDate(v['visitDate']);
+      if (pid.isEmpty || visitDate == null) continue;
+      if (!latestVisitByPatientId.containsKey(pid) ||
+          visitDate.isAfter(_parseVisitDate(latestVisitByPatientId[pid]!['visitDate']) ?? DateTime(1900))) {
+        latestVisitByPatientId[pid] = v;
+      }
+    }
+
     // Determine if we need to show the View More button
     final hasMorePatients = patientsFiltered.length > _patientDisplayLimit;
-    // Get the patients to display based on the current limit
     final patientsToDisplay = hasMorePatients && !_showingAllPatients
         ? patientsFiltered.take(_patientDisplayLimit).toList()
         : patientsFiltered;
-    // ... rest of card code, substitute 'patients' with 'patientsFiltered' in DataTable
+
     bool debugMode = true; // Set to true for extra debugging UI
     return Card(
       margin: const EdgeInsets.only(bottom: 20),
@@ -1470,8 +1513,7 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                   ),
                 ),
               )
-            else
-              if (_patientReportLoaded)
+            else if (_patientReportLoaded)
               Column(
                 children: [
                   SizedBox(
@@ -1485,17 +1527,31 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                             DataColumn(label: Text('Therapist')),
                             DataColumn(label: Text('Doctor')),
                             DataColumn(label: Text('Last Visit')),
+                            DataColumn(label: Text('Amount')),
+                            DataColumn(label: Text('Doctor %')),
+                            DataColumn(label: Text('Doctor Commission')),
+                            DataColumn(label: Text('Therapist Amount')),
                           ],
                           rows: patientsToDisplay.map((patient) {
+                            final patientId = patient['patientId']?.toString() ?? '';
+                            final latest = latestVisitByPatientId[patientId];
+                            String amount = latest?['amount']?.toString() ?? '-';
+                            String docPerc = latest?['doctorCommissionPercent']?.toString() ?? '-';
+                            String docComm = latest?['doctorCommissionAmount']?.toString() ?? '-';
+                            String therAmt = latest?['therapistFeeAmount']?.toString() ?? '-';
+                            if (docPerc != '-' && num.tryParse(docPerc) != null) docPerc = '${docPerc}%';
                             return DataRow(cells: [
                               DataCell(Text(getDisplayPatientName(patient))),
                               DataCell(Text(patient['therapist'] ?? 'Unknown')),
                               DataCell(Text(patient['doctor'] ?? 'Unknown')),
                               DataCell(Text(patient['lastVisit'] ?? '-')),
+                              DataCell(Text(amount)),
+                              DataCell(Text(docPerc)),
+                              DataCell(Text(docComm)),
+                              DataCell(Text(therAmt)),
                             ]);
                           }).toList(),
                         );
-                        // Only wrap on mobile
                         if (isMobile) {
                           return SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
@@ -1507,7 +1563,6 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                       },
                     ),
                   ),
-                  // Show View More button if there are more patients
                   if (hasMorePatients)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -1518,7 +1573,9 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                           });
                         },
                         child: Text(
-                          _showingAllPatients ? 'Show Less' : 'View More (${patientsFiltered.length - _patientDisplayLimit} more)',
+                          _showingAllPatients
+                              ? 'Show Less'
+                              : 'View More (${patientsFiltered.length - _patientDisplayLimit} more)',
                           style: TextStyle(color: Colors.teal[700]),
                         ),
                       ),
@@ -1549,11 +1606,36 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
       String reportType, {List<Map<String, dynamic>>? patientReportOverride}) {
     final List<List<String>> rows = [];
     if (reportType == 'Referrals by Doctor') {
-      rows.add(['Doctor Name', 'Total Referrals', 'Completed', 'Pending']);
+      // --- BEGIN UPGRADE: Add Doctor Revenue column in export ---
+      rows.add([
+        'Doctor Name',
+        'Total Referrals',
+        'Completed',
+        'Pending',
+        'Doctor Revenue (₹)'
+      ]);
       final data = firebaseService.reportData['referralsByDoctor'] as List<
+          Map<String, dynamic>>? ?? [];
+      final allVisits = firebaseService.reportData['allVisits'] as List<
           Map<String, dynamic>>? ?? [];
       final period = _selectedPeriod;
       final range = _getPeriodRange(period);
+
+      // Recompute commission sum for export, matching the visible logic above
+      final Map<String, double> doctorCommissions = {};
+      for (final visit in allVisits) {
+        final doctorName = visit['doctorName'] ?? visit['refDoctorName'] ??
+            visit['doctor'] ?? '';
+        final visitDate = _parseVisitDate(visit['visitDate']);
+        if (doctorName != '' && visitDate != null &&
+            !visitDate.isBefore(range[0]) && visitDate.isBefore(range[1])) {
+          final amt = double.tryParse(
+              visit['doctorCommissionAmount']?.toString() ?? '0') ?? 0.0;
+          doctorCommissions[doctorName] =
+              (doctorCommissions[doctorName] ?? 0.0) + amt;
+        }
+      }
+
       for (final row in data) {
         // Filter based on createdAt in export too
         final createdAt = _parseVisitDate(row['createdAt']);
@@ -1561,13 +1643,18 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
             (createdAt.isBefore(range[0]) || !createdAt.isBefore(range[1]))) {
           continue;
         }
+        final doctorName = row['doctorName'] ?? '';
+        final revenue = doctorCommissions[doctorName]?.toStringAsFixed(2) ??
+            '0.00';
         rows.add([
-          row['doctorName'] ?? '',
+          doctorName,
           '${row['totalReferrals'] ?? 0}',
           '${row['completed'] ?? 0}',
           '${row['pending'] ?? 0}',
+          '₹$revenue',
         ]);
       }
+      // --- END UPGRADE ---
     } else if (reportType == 'Revenue Report') {
       // Export must match filter!
       final List<Map<String, dynamic>> allVisits = firebaseService

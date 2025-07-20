@@ -17,6 +17,7 @@ class AdminPatient {
   final DateTime createdAt;
   final DateTime? assignedAt;
   final List<String> prescriptionImages;
+  final double doctorCommissionPercent;
 
   AdminPatient({
     required this.id,
@@ -35,6 +36,7 @@ class AdminPatient {
     required this.createdAt,
     this.assignedAt,
     this.prescriptionImages = const [],
+    this.doctorCommissionPercent = 20.0, // Default if not present
   });
 
   factory AdminPatient.fromFirestore(DocumentSnapshot doc) {
@@ -60,6 +62,8 @@ class AdminPatient {
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       assignedAt: (data['assignedAt'] as Timestamp?)?.toDate(),
       prescriptionImages: List<String>.from(data['prescriptionImages'] ?? []),
+      doctorCommissionPercent: (data['doctorCommissionPercent'] ?? 20)
+          .toDouble(),
     );
   }
 

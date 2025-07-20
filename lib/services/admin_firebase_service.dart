@@ -191,8 +191,26 @@ class AdminFirebaseService extends ChangeNotifier {
     required String progress,
     required bool followUpRequired,
     List<String>? photos,
+    int? amount, // Optionally take amount
   }) async {
     try {
+      // --- Fetch referral to get doctor commission percent and name ---
+      final referralDoc = await _firestore.collection('referrals').doc(
+          patientId).get();
+      final referralData = referralDoc.data() as Map<String, dynamic>?;
+      final doctorCommissionPercent = referralData?['doctorCommissionPercent'] !=
+          null
+          ? (referralData!['doctorCommissionPercent'] as num).toDouble()
+          : 20.0;
+      final doctorName = referralData?['doctorName'] != null
+          ? referralData!['doctorName'].toString()
+          : '';
+      // Determine amount
+      int amt = amount ?? (referralData?['estimatedCost'] as int?) ?? 1800;
+      // Calculate doctor/therapist split
+      double doctorCommissionAmount = amt * (doctorCommissionPercent / 100.0);
+      double therapistFeeAmount = amt - doctorCommissionAmount;
+      // ---
       final visitData = {
         'visitDate': Timestamp.fromDate(visitDate),
         'therapistId': therapistId,
@@ -202,8 +220,12 @@ class AdminFirebaseService extends ChangeNotifier {
         'followUpRequired': followUpRequired,
         'photos': photos ?? [],
         'createdAt': FieldValue.serverTimestamp(),
+        'amount': amt,
+        'doctorName': doctorName,
+        'doctorCommissionPercent': doctorCommissionPercent,
+        'doctorCommissionAmount': doctorCommissionAmount,
+        'therapistFeeAmount': therapistFeeAmount,
       };
-
       // Add to visit history
       await _firestore.collection('referrals').doc(patientId).update({
         'visitHistory': FieldValue.arrayUnion([visitData]),
@@ -226,8 +248,12 @@ class AdminFirebaseService extends ChangeNotifier {
         'photos': photos ?? [],
         'status': 'completed',
         'createdAt': FieldValue.serverTimestamp(),
+        'amount': amt,
+        'doctorName': doctorName,
+        'doctorCommissionPercent': doctorCommissionPercent,
+        'doctorCommissionAmount': doctorCommissionAmount,
+        'therapistFeeAmount': therapistFeeAmount,
       });
-
       await _loadReportData();
       await _loadDashboardStats();
 
@@ -938,6 +964,7 @@ class AdminFirebaseService extends ChangeNotifier {
     required String patientId,
     required String therapistId,
     required String therapistName,
+    double doctorCommissionPercent = 20.0,
   }) async {
     try {
       await _firestore.collection('referrals').doc(patientId).update({
@@ -947,6 +974,7 @@ class AdminFirebaseService extends ChangeNotifier {
         'currentStatus': 'Assigned to Therapist',
         'assignedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
+        'doctorCommissionPercent': doctorCommissionPercent,
       });
 
       // Create notification for therapist
