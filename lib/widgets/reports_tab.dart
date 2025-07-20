@@ -2208,9 +2208,8 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         for (final row in rows) {
           sheet.appendRow(row);
         }
-        // Set wide columns for standard reports:
         if (title == 'Patient Report') {
-          sheet.setColWidth(0, 25); // Patient Name
+          sheet.setColWidth(0, 25);
           sheet.setColWidth(1, 18);
           sheet.setColWidth(2, 18);
           sheet.setColWidth(3, 18);
@@ -2219,7 +2218,7 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
           sheet.setColWidth(6, 18);
           sheet.setColWidth(7, 18);
         } else if (title == 'Referrals by Doctor') {
-          sheet.setColWidth(0, 24); // Doctor Name
+          sheet.setColWidth(0, 24);
           for (int i = 1; i < (rows[0].length); i++) {
             sheet.setColWidth(i, 16);
           }
@@ -2231,13 +2230,15 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
           for (int i = 0; i < (rows[0].length); i++) {
             sheet.setColWidth(i, 20);
           }
+        } else {
+          for (int i = 0; i < (rows[0].length); i++) {
+            sheet.setColWidth(i, 20);
+          }
         }
       }
       // Add all report sections as sheets
       final rRows = buildExportRows(firebaseService, 'Referrals by Doctor');
       addSheet('Referrals by Doctor', rRows);
-      final vRows = buildExportRows(firebaseService, 'Visits by Therapist');
-      addSheet('Visits by Therapist', vRows);
       final patRows = buildExportRows(firebaseService, 'Patient Report',
           patientReportOverride: _localPatientReport);
       addSheet('Patient Report', patRows);
