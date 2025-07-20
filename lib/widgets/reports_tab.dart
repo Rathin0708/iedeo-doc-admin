@@ -2201,12 +2201,36 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
       AdminFirebaseService firebaseService) async {
     try {
       final excel = xls.Excel.createExcel(); // Automatically creates 1st sheet
-      // Helper to add a sheet
+      // Helper to add a sheet and set nice column widths
       void addSheet(String title, List<List<String>> rows) {
         if (rows.isEmpty) return;
         xls.Sheet sheet = excel[title];
         for (final row in rows) {
           sheet.appendRow(row);
+        }
+        // Set wide columns for standard reports:
+        if (title == 'Patient Report') {
+          sheet.setColWidth(0, 25); // Patient Name
+          sheet.setColWidth(1, 18);
+          sheet.setColWidth(2, 18);
+          sheet.setColWidth(3, 18);
+          sheet.setColWidth(4, 20);
+          sheet.setColWidth(5, 12);
+          sheet.setColWidth(6, 18);
+          sheet.setColWidth(7, 18);
+        } else if (title == 'Referrals by Doctor') {
+          sheet.setColWidth(0, 24); // Doctor Name
+          for (int i = 1; i < (rows[0].length); i++) {
+            sheet.setColWidth(i, 16);
+          }
+        } else if (title == 'Visits by Therapist') {
+          for (int i = 0; i < (rows[0].length); i++) {
+            sheet.setColWidth(i, 18);
+          }
+        } else if (title == 'Revenue Report') {
+          for (int i = 0; i < (rows[0].length); i++) {
+            sheet.setColWidth(i, 20);
+          }
         }
       }
       // Add all report sections as sheets
