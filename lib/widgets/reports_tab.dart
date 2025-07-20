@@ -1508,16 +1508,91 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
 
                             String therAmt = latest?['therapistFeeAmount']?.toString() ?? '-';
 
+                            // Show Last Visit as 12h am/pm if today and visitTime present, else as dd-MM-yyyy. Robust parsing
                             String lastVisitDisplay = '-';
-                            if (latest != null &&
-                                (latest['visitDate'] ?? '') != '') {
-                              lastVisitDisplay = latest['visitDate'].toString();
-                            } else if (patient['lastVisit'] != null &&
-                                patient['lastVisit']
+                            DateTime? lastVisitDt;
+                            String? lastVisitTime;
+                            if (latest != null) {
+                              final dtField = latest['visitDate'];
+                              if (dtField is DateTime)
+                                lastVisitDt = dtField;
+                              else if (dtField != null &&
+                                  dtField.toString().contains('seconds=')) {
+                                final match = RegExp(r'seconds=(\d+)')
+                                    .firstMatch(dtField.toString());
+                                if (match != null) lastVisitDt =
+                                    DateTime.fromMillisecondsSinceEpoch(
+                                        int.parse(match.group(1)!) * 1000);
+                              } else if (dtField != null) {
+                                lastVisitDt =
+                                    DateTime.tryParse(dtField.toString());
+                              }
+                              lastVisitTime = latest['visitTime']?.toString();
+                            }
+                            if (lastVisitDt != null) {
+                              final now = DateTime.now();
+                              bool isToday = lastVisitDt.year == now.year &&
+                                  lastVisitDt.month == now.month &&
+                                  lastVisitDt.day == now.day;
+                              if (isToday && lastVisitTime != null &&
+                                  lastVisitTime != '-' && lastVisitTime
+                                  .trim()
+                                  .isNotEmpty) {
+                                final timeParts = RegExp(r'^(\d{1,2}):(\d{2})')
+                                    .firstMatch(lastVisitTime);
+                                if (timeParts != null) {
+                                  int hour = int.parse(timeParts.group(1)!);
+                                  int minute = int.parse(timeParts.group(2)!);
+                                  String ampm = hour >= 12 ? 'pm' : 'am';
+                                  int hour12 = hour % 12;
+                                  if (hour12 == 0) hour12 = 12;
+                                  lastVisitDisplay =
+                                  '$hour12:${minute.toString().padLeft(
+                                      2, '0')} $ampm';
+                                } else {
+                                  lastVisitDisplay = lastVisitTime;
+                                }
+                              } else {
+                                lastVisitDisplay =
+                                '${lastVisitDt.day.toString().padLeft(
+                                    2, '0')}-${lastVisitDt.month
                                     .toString()
-                                    .isNotEmpty) {
-                              lastVisitDisplay =
-                                  patient['lastVisit'].toString();
+                                    .padLeft(2, '0')}-${lastVisitDt.year}';
+                              }
+                            } else {
+                              final lastVisitField = patient['lastVisit'];
+                              if (lastVisitField != null &&
+                                  lastVisitField != '-' && lastVisitField
+                                  .toString()
+                                  .isNotEmpty) {
+                                try {
+                                  DateTime? parsed;
+                                  if (lastVisitField is DateTime)
+                                    parsed = lastVisitField;
+                                  else if (lastVisitField.toString().contains(
+                                      'seconds=')) {
+                                    final match = RegExp(r'seconds=(\d+)')
+                                        .firstMatch(lastVisitField.toString());
+                                    if (match != null) parsed =
+                                        DateTime.fromMillisecondsSinceEpoch(
+                                            int.parse(match.group(1)!) * 1000);
+                                  } else
+                                    parsed = DateTime.tryParse(
+                                        lastVisitField.toString());
+                                  if (parsed != null) {
+                                    lastVisitDisplay =
+                                    '${parsed.day.toString().padLeft(
+                                        2, '0')}-${parsed.month
+                                        .toString()
+                                        .padLeft(2, '0')}-${parsed.year}';
+                                  } else {
+                                    lastVisitDisplay =
+                                        lastVisitField.toString();
+                                  }
+                                } catch (_) {
+                                  lastVisitDisplay = lastVisitField.toString();
+                                }
+                              }
                             }
                             return DataRow(cells: [
                               DataCell(Text(getDisplayPatientName(patient))),
