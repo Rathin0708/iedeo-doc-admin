@@ -196,22 +196,20 @@ class AdminFirebaseService extends ChangeNotifier {
   }) async {
     try {
       // --- Fetch referral to get doctor commission percent and name ---
-      final referralDoc = await _firestore.collection('referrals').doc(
-          patientId).get();
+      final referralDoc = await _firestore.collection('referrals').doc(patientId).get();
       final referralData = referralDoc.data() as Map<String, dynamic>?;
-      final doctorCommissionPercent = referralData?['doctorCommissionPercent'] !=
-          null
+      final doctorCommissionPercent = referralData?['doctorCommissionPercent'] != null
           ? (referralData!['doctorCommissionPercent'] as num).toDouble()
-          : 20.0;
+          : 20.0; // use default if missing
+
+      final int amt = amount ?? (referralData?['estimatedCost'] as int?) ?? 1800; // use provided or fallback
+      final double doctorCommissionAmount = amt * (doctorCommissionPercent / 100.0);
+      final double therapistFeeAmount = amt - doctorCommissionAmount;
+
       final doctorName = referralData?['doctorName'] != null
           ? referralData!['doctorName'].toString()
           : '';
       // Determine amount
-      int amt = amount ?? (referralData?['estimatedCost'] as int?) ?? 1800;
-      // Calculate doctor/therapist split
-      double doctorCommissionAmount = amt * (doctorCommissionPercent / 100.0);
-      double therapistFeeAmount = amt - doctorCommissionAmount;
-      // ---
       final visitData = {
         'visitDate': Timestamp.fromDate(visitDate),
         'therapistId': therapistId,
@@ -1040,19 +1038,77 @@ class AdminFirebaseService extends ChangeNotifier {
     _setLoading(true);
     try {
       QuerySnapshot referralsSnapshot = await _firestore.collection('referrals').get();
+      QuerySnapshot visitsSnapshot = await _firestore
+          .collection('visits')
+          .get();
+      // Build mapping patientId => list of their visits
+      final Map<String, List<Map<String, dynamic>>> visitsByPatientId = {};
+      for (var doc in visitsSnapshot.docs) {
+        final v = doc.data() as Map<String, dynamic>;
+        final pid = v['patientId']?.toString();
+        if (pid != null) {
+          visitsByPatientId.putIfAbsent(pid, () => []).add(v);
+        }
+      }
       List<Map<String, dynamic>> patientReport = [];
       for (var doc in referralsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
-        // Show all referral data (ADMIN ASSIGNMENT DATA ONLY)
+        final pid = doc.id;
+
+        // Defensive type handling for commission and single amount
+        double? commissionPercent, amount;
+        var cpRaw = data['doctorCommissionPercent'];
+        if (cpRaw is num)
+          commissionPercent = cpRaw.toDouble();
+        else if (cpRaw is String) {
+          String s = cpRaw.replaceAll('%', '').trim();
+          if (s.isNotEmpty) commissionPercent = double.tryParse(s);
+        }
+        var amtRaw = data['amount'] ?? data['estimatedCost'];
+        if (amtRaw is num)
+          amount = amtRaw.toDouble();
+        else if (amtRaw is String && amtRaw
+            .trim()
+            .isNotEmpty) amount = double.tryParse(amtRaw) ?? null;
+        double? doctorCommissionAmount, therapistAmount;
+        if (commissionPercent != null && amount != null) {
+          doctorCommissionAmount = amount * (commissionPercent / 100.0);
+          therapistAmount = amount - doctorCommissionAmount;
+        }
+
+        // --- NEW: Sum all visit amounts for this patient ---
+        final List<Map<String, dynamic>> vlogs = visitsByPatientId[pid] ?? [];
+        double totalAmount = 0;
+        for (var v in vlogs) {
+          final rawAmt = v['amount'];
+          double? logAmt;
+          if (rawAmt is num)
+            logAmt = rawAmt.toDouble();
+          else if (rawAmt is String && rawAmt
+              .trim()
+              .isNotEmpty) logAmt = double.tryParse(rawAmt) ?? null;
+          if (logAmt != null) totalAmount += logAmt;
+        }
+        //-----------------------------------------------------
+
         patientReport.add({
           'patientId': doc.id,
           'patientName': data['name'] ?? data['patientName'] ?? '-',
           'therapist': data['therapistName'] ?? '-',
           'doctor': data['doctorName'] ?? '-',
-          'doctorCommissionPercent': data['doctorCommissionPercent'] ?? '-',
+          'doctorCommissionPercent': commissionPercent != null
+              ? '${commissionPercent.toStringAsFixed(0)}%'
+              : '-',
+          'amount': amount != null ? amount.toStringAsFixed(2) : '-',
+          'doctorCommissionAmount': doctorCommissionAmount != null
+              ? doctorCommissionAmount.toStringAsFixed(2)
+              : '-',
+          'therapistFeeAmount': therapistAmount != null ? therapistAmount
+              .toStringAsFixed(2) : '-',
           'lastVisit': data['lastVisitDate'] != null ? data['lastVisitDate']
               .toString() : '-',
-          // You can add more fields as needed
+          // NEW: total of all log amounts
+          'totalAmount': totalAmount > 0 ? totalAmount.toStringAsFixed(2) : '-',
         });
       }
       _reportData['patientReport'] = patientReport;
@@ -1063,5 +1119,23 @@ class AdminFirebaseService extends ChangeNotifier {
       _setLoading(false);
       notifyListeners();
     }
+  }
+
+  /// Ensures every referral has a valid doctorCommissionPercent; fills missing/blank/null with [defaultPercent]
+  Future<void> ensureReferralCommissionPercent(
+      {double defaultPercent = 20.0}) async {
+    final snapshot = await _firestore.collection('referrals').get();
+    for (final doc in snapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final val = data['doctorCommissionPercent'];
+      if (val == null || val == '-' || val
+          .toString()
+          .trim()
+          .isEmpty) {
+        await doc.reference.update({'doctorCommissionPercent': defaultPercent});
+        print('Backfilled commission percent for ${doc.id}');
+      }
+    }
+    print('Commission percent backfill complete.');
   }
 }

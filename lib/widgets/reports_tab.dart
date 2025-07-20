@@ -1489,10 +1489,10 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                             DataColumn(label: Text('Therapist')),
                             DataColumn(label: Text('Doctor')),
                             DataColumn(label: Text('Last Visit')),
-                            DataColumn(label: Text('Amount')),
+                            DataColumn(label: Text('Total Amount')),
                             DataColumn(label: Text('Doctor %')),
                             DataColumn(label: Text('Doctor Commission')),
-                            DataColumn(label: Text('Therapist Amount')),
+                            DataColumn(label: Text('Therapist Fees')),
                           ],
                           rows: visibleRows.map((patient) {
                             // Sanitize and handle any type inconsistencies gracefully (robustness)
@@ -1506,8 +1506,6 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                             if (docPerc != '-' && num.tryParse(docPerc) != null)
                               docPerc = '${docPerc}%';
 
-                            String amount = latest?['amount']?.toString() ?? '-';
-                            String docComm = latest?['doctorCommissionAmount']?.toString() ?? '-';
                             String therAmt = latest?['therapistFeeAmount']?.toString() ?? '-';
 
                             String lastVisitDisplay = '-';
@@ -1528,9 +1526,37 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                               DataCell(Text(
                                   patient['doctor']?.toString() ?? 'Unknown')),
                               DataCell(Text(lastVisitDisplay)),
-                              DataCell(Text(amount)),
+                              DataCell(Text(
+                                  patient['totalAmount'] != null &&
+                                      patient['totalAmount'] != '-'
+                                      ? '₹${patient['totalAmount']}'
+                                      : '-' // Show as currency
+                              )),
                               DataCell(Text(docPerc)),
-                              DataCell(Text(docComm)),
+                              DataCell(Text(
+                                // Show Doctor Commission as totalAmount × doctorCommissionPercent / 100, formatted
+                                (() {
+                                  final totalAmountRaw = (patient['totalAmount'] ??
+                                      '')
+                                      .toString()
+                                      .replaceAll('₹', '')
+                                      .replaceAll(',', '')
+                                      .trim();
+                                  final percRaw = (patient['doctorCommissionPercent'] ??
+                                      '').toString().replaceAll('%', '').trim();
+                                  final totalAmount = double.tryParse(
+                                      totalAmountRaw);
+                                  final percentNumeric = double.tryParse(
+                                      percRaw);
+                                  if (totalAmount != null &&
+                                      percentNumeric != null) {
+                                    double commission = totalAmount *
+                                        (percentNumeric / 100.0);
+                                    return '₹${commission.toStringAsFixed(2)}';
+                                  }
+                                  return '-';
+                                })(),
+                              )),
                               DataCell(Text(therAmt)),
                             ]);
                           }).toList(),
