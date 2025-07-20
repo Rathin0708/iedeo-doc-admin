@@ -1025,26 +1025,38 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
     final allVisits = dataF['allVisits'] as List<Map<String, dynamic>>? ?? [];
 
     // --- BEGIN NEW LOGIC ---
-    // Map to quickly sum doctor commission per doctor for the selected period
+    // Map to sum up all doctor commission for each doctor for the selected period, across all patients and visits
     final Map<String, double> doctorCommissions = {};
     final periodRange = _getPeriodRange(_selectedPeriod);
     final periodStart = periodRange[0];
     final periodEnd = periodRange[1];
     for (final visit in allVisits) {
-      // Get doctor name flexibly from possible keys
       final doctorName = visit['doctorName'] ?? visit['refDoctorName'] ??
           visit['doctor'] ?? '';
-      // Only sum for visits in the selected period (as per current report filters)
       final visitDate = _parseVisitDate(visit['visitDate']);
       if (doctorName != '' && visitDate != null &&
           !visitDate.isBefore(periodStart) && visitDate.isBefore(periodEnd)) {
-        // doctorCommissionAmount is expected to be present from visit logging
-        final amt = double.tryParse(
-            visit['doctorCommissionAmount']?.toString() ?? '0') ?? 0.0;
-        doctorCommissions[doctorName] =
-            (doctorCommissions[doctorName] ?? 0.0) + amt;
+        var rawVal = visit['doctorCommissionAmount'];
+        double? commission;
+        if (rawVal is num)
+          commission = rawVal.toDouble();
+        else if (rawVal is String)
+          commission = double.tryParse(
+              rawVal.replaceAll('₹', '').replaceAll(',', '').trim());
+        // Robust debug log for what is tried and what is getting summed:
+        print(
+            'DoctorRevenue PARSE: doctor="$doctorName", raw="$rawVal" => commission=$commission');
+        if (commission != null) {
+          doctorCommissions[doctorName] =
+              (doctorCommissions[doctorName] ?? 0.0) + commission;
+          // Debug log for what is getting summed:
+          print(
+              'DoctorRevenue SUM: $doctorName ← +$commission (now ${doctorCommissions[doctorName]})');
+        }
       }
     }
+    print('Doctor Commission Revenue Map (period: $_selectedPeriod):');
+    doctorCommissions.forEach((k, v) => print('  $k: ₹$v'));
     // --- END NEW LOGIC ---
 
     // Create a special list for today's referrals if needed
@@ -1246,13 +1258,10 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                             DataColumn(label: Text(_selectedPeriod == 'Today'
                                 ? 'Today\'s Pending'
                                 : 'Pending')),
-                            // --- NEW COLUMN FOR DOCTOR REVENUE ---
-                            const DataColumn(label: Text('Doctor Revenue (₹)')),
                           ],
                           rows: doctorsToDisplay.map((doctor) {
                             final doctorName = doctor['doctorName'] ??
                                 'Unknown';
-                            // Output revenue for this doctor, formatted to 2 decimal places
                             final revenue = doctorCommissions[doctorName]
                                 ?.toStringAsFixed(2) ?? '0.00';
                             return DataRow(cells: [
@@ -1261,7 +1270,6 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                                   Text('${doctor['totalReferrals'] ?? 0}')),
                               DataCell(Text('${doctor['completed'] ?? 0}')),
                               DataCell(Text('${doctor['pending'] ?? 0}')),
-                              DataCell(Text('₹$revenue')),
                             ]);
                           }).toList(),
                         );
@@ -1482,7 +1490,7 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                     width: double.infinity,
                     child: LayoutBuilder(
                       builder: (context, constraints) {
-                        final isMobile = constraints.maxWidth < 600;
+                        final isMobile = constraints.maxWidth < 1000;
                         final table = DataTable(
                           columns: const [
                             DataColumn(label: Text('Patient Name')),
@@ -1711,7 +1719,6 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         'Total Referrals',
         'Completed',
         'Pending',
-        'Doctor Revenue (₹)'
       ]);
       final data = firebaseService.reportData['referralsByDoctor'] as List<
           Map<String, dynamic>>? ?? [];
@@ -1743,14 +1750,11 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
           continue;
         }
         final doctorName = row['doctorName'] ?? '';
-        final revenue = doctorCommissions[doctorName]?.toStringAsFixed(2) ??
-            '0.00';
         rows.add([
           doctorName,
           '${row['totalReferrals'] ?? 0}',
           '${row['completed'] ?? 0}',
           '${row['pending'] ?? 0}',
-          '₹$revenue',
         ]);
       }
       // --- END UPGRADE ---
