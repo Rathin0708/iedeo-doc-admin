@@ -2048,6 +2048,10 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
       AdminFirebaseService firebaseService) async {
     double commissionPercent = 20.0; // Default
 
+    // Store references at the beginning to avoid widget deactivation issues
+    final navigator = Navigator.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
     // Improved network error handling for getAvailableTherapists and assignment actions
     try {
       final therapists = await firebaseService.getAvailableTherapists();
@@ -2151,13 +2155,17 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
         final therapist = assignmentResult['therapist'] as AdminUser;
         final doctorCommissionPercent = assignmentResult['commissionPercent'] as double;
 
-        // Show loading
+        // References already stored at method beginning
+
+        // Show loading dialog
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (ctx) => const Center(child: CircularProgressIndicator()),
+          builder: (ctx) => WillPopScope(
+            onWillPop: () async => false, // Prevent back button
+            child: const Center(child: CircularProgressIndicator()),
+          ),
         );
-        // No await above, so no mounted check needed here
 
         try {
           final success = await firebaseService.assignPatientToTherapist(
@@ -2167,60 +2175,71 @@ class _PatientAssignmentTabState extends State<PatientAssignmentTab>
             doctorCommissionPercent: doctorCommissionPercent,
           );
 
-          // After an async call, always check if the widget is still mounted before using context.
-          if (!mounted) return;
-
-          Navigator.of(context).pop(); // Close loading
-
-          if (success) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('${patient.patientName} assigned to ${therapist
-                    .name} (Doctor commission: $doctorCommissionPercent%)'),
-                backgroundColor: Colors.green,
-              ),
-            );
+          // Always close loading dialog first, then check mounted
+          if (mounted) {
+            navigator.pop(); // Close loading dialog
+            
+            if (success) {
+              scaffoldMessenger.showSnackBar(
+                SnackBar(
+                  content: Text('${patient.patientName} assigned to ${therapist
+                      .name} (Doctor commission: $doctorCommissionPercent%)'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            } else {
+              scaffoldMessenger.showSnackBar(
+                const SnackBar(
+                  content: Text('Failed to assign patient. Please try again.'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
           }
         } on SocketException catch (_) {
           // Show network-is-unreachable specific message
-          if (!mounted) return;
-          Navigator.of(context).pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  'Network is unreachable. Please check your internet connection and try again.'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          if (mounted) {
+            navigator.pop();
+            scaffoldMessenger.showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'Network is unreachable. Please check your internet connection and try again.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         } catch (e) {
-          if (!mounted) return;
-          Navigator.of(context).pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: ${e.toString()}'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          if (mounted) {
+            navigator.pop();
+            scaffoldMessenger.showSnackBar(
+              SnackBar(
+                content: Text('Error: ${e.toString()}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
       }
     } on SocketException catch (_) {
       // Outermost: getAvailableTherapists could also fail for network
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Network is unreachable. Please check your internet connection and try again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Network is unreachable. Please check your internet connection and try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

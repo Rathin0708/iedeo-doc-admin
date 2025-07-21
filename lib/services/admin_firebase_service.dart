@@ -969,6 +969,7 @@ class AdminFirebaseService extends ChangeNotifier {
     required String therapistName,
     double doctorCommissionPercent = 20.0,
   }) async {
+    _setLoading(true);
     try {
       await _firestore.collection('referrals').doc(patientId).update({
         'therapistId': therapistId,
@@ -991,14 +992,21 @@ class AdminFirebaseService extends ChangeNotifier {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
+      // Refresh data without triggering loading state
       await _loadUnassignedPatients();
+      await _loadAllPatients(); // Also refresh all patients list
       await _loadDashboardStats();
+      
+      // Ensure loading state is properly reset
+      _setLoading(false);
 
       print('✅ Patient assigned: $patientId to $therapistName');
       return true;
     } catch (e) {
       _errorMessage = 'Failed to assign patient: $e';
       print('❌ Error assigning patient: $e');
+      // Ensure loading state is reset even on error
+      _setLoading(false);
       notifyListeners();
       return false;
     }
