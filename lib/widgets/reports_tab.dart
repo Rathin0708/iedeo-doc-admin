@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/admin_firebase_service.dart';
@@ -8,7 +9,6 @@ import 'package:pdf/pdf.dart'; // For PdfColor, PdfPageFormat
 import 'package:flutter/services.dart' show rootBundle;
 // Excel export dependencies
 import 'package:excel/excel.dart' as xls;
-import 'dart:typed_data';
 import 'package:file_saver/file_saver.dart';
 
 class ReportsTab extends StatefulWidget {
@@ -94,7 +94,9 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
     
     // Only log unexpected formats that should be dates but can't be parsed
     if (d.toString().isNotEmpty && d.toString() != 'Not visited yet' && d.toString() != '-') {
-      print('Failed to parse date: $d');
+      if (kDebugMode) {
+        print('Failed to parse date: $d');
+      }
     }
     return null;
   }
@@ -208,9 +210,13 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         
         // Debug output to check patient data structure
         if (_localPatientReport.isNotEmpty) {
-          print('First patient in _localPatientReport: ${_localPatientReport.first}');
+          if (kDebugMode) {
+            print('First patient in _localPatientReport: ${_localPatientReport.first}');
+          }
         } else {
-          print('No patients in _localPatientReport');
+          if (kDebugMode) {
+            print('No patients in _localPatientReport');
+          }
         }
       });
     }
@@ -860,8 +866,7 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                               _buildReferralsByDoctorReport(firebaseService),
 
                               _buildPatientReport(firebaseService),
-                              _buildRevenueReport(firebaseService),
-                            ],
+                              _buildRevenueReport(firebaseService),],
                           );
                         } else
                         if (_selectedReportType == 'Referrals by Doctor') {
@@ -934,7 +939,9 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
     List<dynamic> allReferrals = firebaseService.reportData['allReferrals'] ?? [];
     
     // Debug: Print all referrals and their status
-    print('Checking all referrals for completed status:');
+    if (kDebugMode) {
+      print('Checking all referrals for completed status:');
+    }
     for (var referral in allReferrals) {
       String status = '';
       if (referral.containsKey('status')) {
@@ -942,12 +949,16 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
       } else if (referral.containsKey('currentStatus')) {
         status = referral['currentStatus'].toString();
       }
-      print('Referral ID: ${referral['id']}, Status: $status');
+      if (kDebugMode) {
+        print('Referral ID: ${referral['id']}, Status: $status');
+      }
       
       // Check for 'completed' in any case format
       if (status.toLowerCase() == 'completed') {
         completedCount++;
-        print('Found completed referral: ${referral['id']}');
+        if (kDebugMode) {
+          print('Found completed referral: ${referral['id']}');
+        }
       }
     }
     
@@ -963,7 +974,9 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         
         if (status.toLowerCase().contains('complet')) {
           completedCount++;
-          print('Found completed referral (partial match): ${referral['id']}');
+          if (kDebugMode) {
+            print('Found completed referral (partial match): ${referral['id']}');
+          }
         }
       }
     }
@@ -976,12 +989,16 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         if (doctorStats.containsKey('completed')) {
           int docCompleted = (doctorStats['completed'] ?? 0) as int;
           completedCount += docCompleted;
-          print('Adding ${docCompleted} completed referrals from doctor: ${doctorStats['doctorName']}');
+          if (kDebugMode) {
+            print('Adding $docCompleted completed referrals from doctor: ${doctorStats['doctorName']}');
+          }
         }
       }
     }
     
-    print('Total completed referrals count: $completedCount');
+    if (kDebugMode) {
+      print('Total completed referrals count: $completedCount');
+    }
     return completedCount.toString();
   }
 
@@ -1063,9 +1080,9 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
           !visitDate.isBefore(periodStart) && visitDate.isBefore(periodEnd)) {
         var rawVal = visit['doctorCommissionAmount'];
         double? commission;
-        if (rawVal is num)
+        if (rawVal is num) {
           commission = rawVal.toDouble();
-        else if (rawVal is String)
+        } else if (rawVal is String)
           commission = double.tryParse(
               rawVal.replaceAll('₹', '').replaceAll(',', '').trim());
         // Robust debug log for what is tried and what is getting summed:
@@ -1080,7 +1097,9 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         }
       }
     }
-    print('Doctor Commission Revenue Map (period: $_selectedPeriod):');
+    if (kDebugMode) {
+      print('Doctor Commission Revenue Map (period: $_selectedPeriod):');
+    }
     doctorCommissions.forEach((k, v) => print('  $k: ₹$v'));
     // --- END NEW LOGIC ---
 
@@ -1112,7 +1131,6 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
           } else if (referral.containsKey('currentStatus')) {
             status = referral['currentStatus'].toString();
           }
-          
           // Initialize doctor entry if not exists
           if (!todayReferralsByDoctor.containsKey(doctorName)) {
             todayReferralsByDoctor[doctorName] = {
@@ -1132,7 +1150,9 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
           if (status.toLowerCase() == 'completed' || 
               status.toLowerCase().contains('complet') || 
               status.toLowerCase() == 'done') {
-            print('Found completed referral for doctor: $doctorName, Status: $status');
+            if (kDebugMode) {
+              print('Found completed referral for doctor: $doctorName, Status: $status');
+            }
             todayReferralsByDoctor[doctorName]!['completed'] = 
                 (todayReferralsByDoctor[doctorName]!['completed'] as int) + 1;
           } else {
@@ -1474,9 +1494,13 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
     // --- BEGIN: patient report filtering (show ALL patients, only sum/date respect filter) ---
     final filteredRows = patientReport.where((patient) {
       if ((_selectedDoctor?.isNotEmpty ?? false) &&
-          patient['doctor'] != _selectedDoctor) return false;
+          patient['doctor'] != _selectedDoctor) {
+        return false;
+      }
       if ((_selectedTherapist?.isNotEmpty ?? false) &&
-          patient['therapist'] != _selectedTherapist) return false;
+          patient['therapist'] != _selectedTherapist) {
+        return false;
+      }
       if (_selectedStatus == 'Completed') {
         final pid = (patient['patientId'] ?? '').toString().trim();
         final pname = (patient['patientName'] ?? patient['name'] ?? '')
@@ -1518,8 +1542,9 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         if (!matchedById && !matchedByName) return false;
       }
       if (_selectedStatus == 'Pending' &&
-          (patient['lastVisit'] != '-' && patient['lastVisit'] != null))
+          (patient['lastVisit'] != '-' && patient['lastVisit'] != null)) {
         return false;
+      }
       // Do NOT filter period here!
       return true;
     }).toList();
@@ -1623,14 +1648,16 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                                 latest['doctorCommissionPercent'] != null) {
                               docPerc =
                                   latest['doctorCommissionPercent'].toString();
-                              if (docPerc != '-' && !docPerc.contains('%'))
+                              if (docPerc != '-' && !docPerc.contains('%')) {
                                 docPerc = '$docPerc%';
+                              }
                             } else
                             if (patient['doctorCommissionPercent'] != null) {
                               docPerc =
                                   patient['doctorCommissionPercent'].toString();
-                              if (docPerc != '-' && !docPerc.contains('%'))
+                              if (docPerc != '-' && !docPerc.contains('%')) {
                                 docPerc = '$docPerc%';
+                              }
                             }
 
                             // For Total Amount, sum all visit amounts in period for this patient
@@ -1638,9 +1665,9 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                             for (var v in visitsInPeriod) {
                               final amtRaw = v['amount'];
                               double? val;
-                              if (amtRaw is num)
+                              if (amtRaw is num) {
                                 val = amtRaw.toDouble();
-                              else if (amtRaw is String && amtRaw
+                              } else if (amtRaw is String && amtRaw
                                   .trim()
                                   .isNotEmpty)
                                 val = double.tryParse(
@@ -1714,15 +1741,17 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
                             String? lastVisitTime;
                             if (latest != null) {
                               final dtField = latest['visitDate'];
-                              if (dtField is DateTime)
+                              if (dtField is DateTime) {
                                 lastVisitDt = dtField;
-                              else if (dtField != null &&
+                              } else if (dtField != null &&
                                   dtField.toString().contains('seconds=')) {
                                 final match = RegExp(r'seconds=(\d+)')
                                     .firstMatch(dtField.toString());
-                                if (match != null) lastVisitDt =
+                                if (match != null) {
+                                  lastVisitDt =
                                     DateTime.fromMillisecondsSinceEpoch(
                                         int.parse(match.group(1)!) * 1000);
+                                }
                               } else if (dtField != null) {
                                 lastVisitDt =
                                     DateTime.tryParse(dtField.toString());
@@ -1949,14 +1978,16 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         String? lastVisitTime;
         if (latest != null) {
           final dtField = latest['visitDate'];
-          if (dtField is DateTime)
+          if (dtField is DateTime) {
             lastVisitDt = dtField;
-          else if (dtField != null && dtField.toString().contains('seconds=')) {
+          } else if (dtField != null && dtField.toString().contains('seconds=')) {
             final match = RegExp(r'seconds=(\d+)').firstMatch(
                 dtField.toString());
-            if (match != null) lastVisitDt =
+            if (match != null) {
+              lastVisitDt =
                 DateTime.fromMillisecondsSinceEpoch(
                     int.parse(match.group(1)!) * 1000);
+            }
           } else if (dtField != null) {
             lastVisitDt = DateTime.tryParse(dtField.toString());
           }
@@ -1996,9 +2027,9 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         for (var v in visitsInPeriod) {
           final amtRaw = v['amount'];
           double? val;
-          if (amtRaw is num)
+          if (amtRaw is num) {
             val = amtRaw.toDouble();
-          else if (amtRaw is String && amtRaw
+          } else if (amtRaw is String && amtRaw
               .trim()
               .isNotEmpty)
             val = double.tryParse(
@@ -2023,12 +2054,14 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
         String docPerc = '-';
         if (latest != null && latest['doctorCommissionPercent'] != null) {
           docPerc = latest['doctorCommissionPercent'].toString();
-          if (docPerc != '-' && !docPerc.contains('%'))
+          if (docPerc != '-' && !docPerc.contains('%')) {
             docPerc = '$docPerc%';
+          }
         } else if (row['doctorCommissionPercent'] != null) {
           docPerc = row['doctorCommissionPercent'].toString();
-          if (docPerc != '-' && !docPerc.contains('%'))
+          if (docPerc != '-' && !docPerc.contains('%')) {
             docPerc = '$docPerc%';
+          }
         }
         // Doctor commission
         String docCommDisplay = '-';
@@ -2276,7 +2309,6 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
     const int maxPages = 500;
     const int rowsPerPage = 40;
     const int maxRows = maxPages * rowsPerPage;
-
     // Pre-flight: get all export-able tables to check their row counts
     final List<List<String>> rRows = buildExportRows(
         firebaseService, 'Referrals by Doctor');
