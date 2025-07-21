@@ -138,20 +138,33 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
   @override
   void initState() {
     super.initState();
-    // Fetch real patient report data only once when widget is initialized
+    // Check if patient report data is already loaded, if not fetch it
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final service = Provider.of<AdminFirebaseService>(context, listen: false);
-      await service.fetchPatientReport();
-      // Save data locally if not already done (prevents re-clearing)
-      if (mounted) {
-        setState(() {
-          _localPatientReport = List<Map<String, dynamic>>.from(
-              service.reportData['patientReport'] ?? []);
-          _patientReportLoaded = true;
-          
-          // Extract unique doctors and therapists from the data
-          _loadFilterOptions();
-        });
+      
+      // Check if patient report data is already available from main report loading
+      if (service.reportData['patientReport'] != null && 
+          (service.reportData['patientReport'] as List).isNotEmpty) {
+        // Use already loaded data
+        if (mounted) {
+          setState(() {
+            _localPatientReport = List<Map<String, dynamic>>.from(
+                service.reportData['patientReport'] ?? []);
+            _patientReportLoaded = true;
+            _loadFilterOptions();
+          });
+        }
+      } else {
+        // Fallback: fetch patient report data if not already loaded
+        await service.fetchPatientReport();
+        if (mounted) {
+          setState(() {
+            _localPatientReport = List<Map<String, dynamic>>.from(
+                service.reportData['patientReport'] ?? []);
+            _patientReportLoaded = true;
+            _loadFilterOptions();
+          });
+        }
       }
     });
   }
@@ -1423,10 +1436,12 @@ class _ReportsTabState extends State<ReportsTab> with AutomaticKeepAliveClientMi
   bool _showingAllPatients = false;
   
   Widget _buildPatientReport(AdminFirebaseService firebaseService) {
-    // Type-safe, always get expected structure
-    final raw = firebaseService.reportData['patientReport'];
-    final List<Map<String, dynamic>> patientReport =
-    (raw is List) ? raw.whereType<Map<String, dynamic>>().toList() : [];
+    // Use local cached data if available, otherwise use firebaseService data
+    final List<Map<String, dynamic>> patientReport = _patientReportLoaded 
+        ? _localPatientReport 
+        : (firebaseService.reportData['patientReport'] is List 
+            ? (firebaseService.reportData['patientReport'] as List).whereType<Map<String, dynamic>>().toList() 
+            : []);
     final allVisits = firebaseService.reportData['allVisits'] as List<Map<String, dynamic>>? ?? [];
     final allReferrals = firebaseService.reportData['allReferrals'] as List<
         Map<String, dynamic>>? ?? [];

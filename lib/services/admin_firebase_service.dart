@@ -361,6 +361,9 @@ class AdminFirebaseService extends ChangeNotifier {
         return { ...data, 'id': doc.id};
       }).toList();
       
+      // Generate patient report data
+      final patientReport = await _generatePatientReport(allReferralsSnapshot, allVisitsSnapshot);
+      
       _reportData = {
         'referralsByDoctor': referralsByDoctor,
         'visitsByTherapist': visitsByTherapist,
@@ -374,6 +377,7 @@ class AdminFirebaseService extends ChangeNotifier {
         'estimatedRevenue': revenueData['thisMonth'] ?? 0,
         'allVisits': allVisits, // Add the actual visits list for UI reports
         'allReferrals': allReferrals, // Add raw referrals data for detailed filtering
+        'patientReport': patientReport, // Add patient report data
       };
 
       notifyListeners();
@@ -1119,6 +1123,80 @@ class AdminFirebaseService extends ChangeNotifier {
       _setLoading(false);
       notifyListeners();
     }
+  }
+
+  /// Helper method to generate patient report data from snapshots
+  Future<List<Map<String, dynamic>>> _generatePatientReport(
+      QuerySnapshot referralsSnapshot, QuerySnapshot visitsSnapshot) async {
+    // Build mapping patientId => list of their visits
+    final Map<String, List<Map<String, dynamic>>> visitsByPatientId = {};
+    for (var doc in visitsSnapshot.docs) {
+      final v = doc.data() as Map<String, dynamic>;
+      final pid = v['patientId']?.toString();
+      if (pid != null) {
+        visitsByPatientId.putIfAbsent(pid, () => []).add(v);
+      }
+    }
+    
+    List<Map<String, dynamic>> patientReport = [];
+    for (var doc in referralsSnapshot.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final pid = doc.id;
+
+      // Defensive type handling for commission and single amount
+      double? commissionPercent, amount;
+      var cpRaw = data['doctorCommissionPercent'];
+      if (cpRaw is num)
+        commissionPercent = cpRaw.toDouble();
+      else if (cpRaw is String) {
+        String s = cpRaw.replaceAll('%', '').trim();
+        if (s.isNotEmpty) commissionPercent = double.tryParse(s);
+      }
+      var amtRaw = data['amount'] ?? data['estimatedCost'];
+      if (amtRaw is num)
+        amount = amtRaw.toDouble();
+      else if (amtRaw is String && amtRaw.trim().isNotEmpty) 
+        amount = double.tryParse(amtRaw) ?? null;
+        
+      double? doctorCommissionAmount, therapistAmount;
+      if (commissionPercent != null && amount != null) {
+        doctorCommissionAmount = amount * (commissionPercent / 100.0);
+        therapistAmount = amount - doctorCommissionAmount;
+      }
+
+      // Sum all visit amounts for this patient
+      final List<Map<String, dynamic>> vlogs = visitsByPatientId[pid] ?? [];
+      double totalAmount = 0;
+      for (var v in vlogs) {
+        final rawAmt = v['amount'];
+        double? logAmt;
+        if (rawAmt is num)
+          logAmt = rawAmt.toDouble();
+        else if (rawAmt is String && rawAmt.trim().isNotEmpty) 
+          logAmt = double.tryParse(rawAmt) ?? null;
+        if (logAmt != null) totalAmount += logAmt;
+      }
+
+      patientReport.add({
+        'patientId': doc.id,
+        'patientName': data['name'] ?? data['patientName'] ?? '-',
+        'therapist': data['therapistName'] ?? '-',
+        'doctor': data['doctorName'] ?? '-',
+        'doctorCommissionPercent': commissionPercent != null
+            ? '${commissionPercent.toStringAsFixed(0)}%'
+            : '-',
+        'amount': amount != null ? amount.toStringAsFixed(2) : '-',
+        'doctorCommissionAmount': doctorCommissionAmount != null
+            ? doctorCommissionAmount.toStringAsFixed(2)
+            : '-',
+        'therapistFeeAmount': therapistAmount != null 
+            ? therapistAmount.toStringAsFixed(2) : '-',
+        'lastVisit': data['lastVisitDate'] != null 
+            ? data['lastVisitDate'].toString() : '-',
+        'totalAmount': totalAmount > 0 ? totalAmount.toStringAsFixed(2) : '-',
+      });
+    }
+    return patientReport;
   }
 
   /// Ensures every referral has a valid doctorCommissionPercent; fills missing/blank/null with [defaultPercent]
